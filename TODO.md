@@ -8,7 +8,7 @@
   - MES dataset: https://github.com/Harsh9524/MES-Dataset/tree/main
 - Find alternative image based engagement dataset to train focus classifier (it looks like the labels they made for the FER dataset aren't public)
 - Train emotion detection classifier on FER dataset https://www.kaggle.com/datasets/msambare/fer2013
-- Evaluate on datasets such as CK+ and DaISEE
+- Evaluate on datasets such as CK+ and DAiSEE
 
 ### Build classifier according to https://thesai.org/Downloads/Volume14No3/Paper_71-Convolutional_Neural_Network_Model.pdf
 - Datasets Used
