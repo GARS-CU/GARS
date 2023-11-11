@@ -4,7 +4,7 @@
 
 ### Build classifier according to https://www.sciencedirect.com/science/article/pii/S0045790621002597
 - Datasets Used
-  - FER-2013: https://www.kaggle.com/datasets/msambare/fer2013
+  - FER2013: https://www.kaggle.com/datasets/msambare/fer2013
   - MES dataset: https://github.com/Harsh9524/MES-Dataset/tree/main
 - Find alternative image based engagement dataset to train focus classifier (it looks like the labels they made for the FER dataset aren't public)
 - Train emotion detection classifier on FER dataset https://www.kaggle.com/datasets/msambare/fer2013
@@ -16,6 +16,6 @@
 - Figure out how to extract features using OpenFace library and perform feature selection using either PCA or SVD
 - Try to get performance comparable to what's in paper and evaluate performance on other datasets like CK+
 
-### Implement the classifier discribed in https://arxiv.org/pdf/2306.09626.pdf
+### Implement the emotion recognition classifier discribed in https://arxiv.org/pdf/2306.09626.pdf
 - Find out how to truncate the pretrained model used in the paper: https://huggingface.co/docs/transformers/model_doc/mobilenet_v1
-- try to achieve similar results as authors did in paper
+- try to achieve similar results on FER2013 as authors did in paper
