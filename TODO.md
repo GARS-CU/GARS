@@ -14,5 +14,8 @@
 - Datasets Used
   - DAiSEE dataset: https://drive.google.com/file/d/1yrk_wyhZ-c7q0Mcyyi888ylFkl_JDELi/view?usp=share_link
 - Figure out how to extract features using OpenFace library and perform feature selection using either PCA or SVD
-- Try to get performance comparable to what's in paper and evaluate performance on other video based engagement datasets like CK+
+- Try to get performance comparable to what's in paper and evaluate performance on other datasets like CK+
 
+### Implement the classifier discribed in https://arxiv.org/pdf/2306.09626.pdf
+- Find out how to truncate the pretrained model used in the paper: https://huggingface.co/docs/transformers/model_doc/mobilenet_v1
+- try to achieve similar results as authors did in paper
