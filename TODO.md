@@ -11,8 +11,7 @@
 - Evaluate on datasets such as CK+ and DaISEE
 
 ### Build classifier according to https://thesai.org/Downloads/Volume14No3/Paper_71-Convolutional_Neural_Network_Model.pdf
-
--Datasets Used
+- Datasets Used
   - DAiSEE dataset: https://drive.google.com/file/d/1yrk_wyhZ-c7q0Mcyyi888ylFkl_JDELi/view?usp=share_link
 - Figure out how to extract features using OpenFace library and perform feature selection using either PCA or SVD
 - Try to get performance comparable to what's in paper and evaluate performance on other video based engagement datasets like CK+
