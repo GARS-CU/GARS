@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 
 classes = ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"]
-path_dataset = os.path.abspath("FER2013")
+path_dataset = os.path.abspath("/zooper2/gars/datasets/FER2013")
 
 def load_data(subset):
     pathname = os.path.join(path_dataset, subset)
