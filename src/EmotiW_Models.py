@@ -13,10 +13,10 @@ from sklearn.decomposition import PCA
 #Here I tested out a couple of models on the dataset (but not really thoroughly)
 
 #load in the datasets
-x_train = np.load("EmotiW_x_train.npy")
-y_train  = np.load("EmotiW_y_train.npy")
-x_test = np.load("EmotiW_x_test.npy")
-y_test = np.load("EmotiW_y_test.npy")
+x_train = np.load("../../datasets/EmotiW/EmotiW_x_train.npy")
+y_train  = np.load("../../datasets/EmotiW/EmotiW_y_train.npy")
+x_test = np.load("../../datasets/EmotiW/EmotiW_x_test.npy")
+y_test = np.load("../../datasets/EmotiW/EmotiW_y_test.npy")
 
 #this sets the number of features used by the models. A lot of the open face features seemed somewhat
 #redundant or highly correlated with one another so I thought that doing PCA to reduce the number of features

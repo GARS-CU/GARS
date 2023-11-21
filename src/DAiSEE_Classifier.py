@@ -9,7 +9,7 @@ from tensorflow.keras import layers
 
 IMG_SIZE = -1
 
-path_prefix = os.path.abspath("DAiSEE")
+path_prefix = os.path.abspath("..\..\datasets\DAiSEE")
 
 train = pd.read_csv(os.path.join(path_prefix, "Labels\TrainLabels.csv"))
 test = pd.read_csv(os.path.join(path_prefix, "Labels\TestLabels.csv"))

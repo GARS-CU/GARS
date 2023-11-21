@@ -1,4 +1,3 @@
-from functools import cache
 import tensorflow as tf
 import os
 import numpy as np
@@ -14,10 +13,10 @@ class Attention(tf.keras.layers.Layer):
         return tf.reshape(y, [size[0], size[1]])
 
         
-x_train = np.load("FERP_xtrain.npy")
-y_train = np.load("FERP_ytrain.npy")
-x_test = np.load("FERP_xtest.npy")
-y_test = np.load("FERP_ytest.npy")    
+x_train = np.load("../../datasets/FERP/FERP_xtrain.npy")
+y_train = np.load("../../datasets/FERP/FERP_ytrain.npy")
+x_test = np.load("../../datasets/FERP/FERP_xtest.npy")
+y_test = np.load("../../datasets/FERP/FERP_ytest.npy")    
         
 
 y_train = np.argmax(y_train, axis = 1)

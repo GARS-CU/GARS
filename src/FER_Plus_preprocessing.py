@@ -3,7 +3,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
-df = pd.read_csv("FER_plus.csv")
+
+df = pd.read_csv("../../datasets/FERP/FER_plus.csv")
 
 dataset = np.zeros((35887, 48, 48, 1))
 labels = []
@@ -22,9 +23,9 @@ labels = np.array(labels)
 x_train, x_test, y_train, y_test = train_test_split(dataset, labels, test_size = .2)
 x_val, x_test, y_val, y_test = train_test_split(dataset, labels, test_size = .2)
                   
-np.save( "FERP_xtrain.npy", x_train)
-np.save("FERP_ytrain.npy", y_train)
-np.save("FERP_xtest.npy", x_test)
-np.save("FERP_ytest.npy", y_test)
-np.save("FERP_xval.npy", x_val)
-np.save("FERP_yval.npy", y_val)
+np.save( "../../datasets/FERP/FERP_xtrain.npy", x_train)
+np.save("../../datasets/FERP_ytrain.npy", y_train)
+np.save("../../datasets/FERP_xtest.npy", x_test)
+np.save("../../datasets/FERP_ytest.npy", y_test)
+np.save("../../datasets/FERP_xval.npy", x_val)
+np.save("../../datasets/FERP_yval.npy", y_val)
