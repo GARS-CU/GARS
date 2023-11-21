@@ -1,3 +1,4 @@
+from functools import cache
 import tensorflow as tf
 import os
 import numpy as np
@@ -9,17 +10,27 @@ class Attention(tf.keras.layers.Layer):
         size = tf.shape(x)
         x = tf.reshape(x, [size[0], size[1], 1])
         y = tf.einsum("...ij,...jk->...ik", x, tf.transpose(x, perm = [0, 2, 1]))/16.0
-        y = tf.matmul(y, x)
+        y = tf.matmul(tf.nn.softmax(y), x)
         return tf.reshape(y, [size[0], size[1]])
 
         
-        
+x_train = np.load("FERP_xtrain.npy")
+y_train = np.load("FERP_ytrain.npy")
+x_test = np.load("FERP_xtest.npy")
+y_test = np.load("FERP_ytest.npy")    
         
 
+y_train = np.argmax(y_train, axis = 1)
+y_test = np.argmax(y_test, axis = 1)
+
+
+
+'''
 x_train = np.load("x_train.npy")
 y_train = np.load("y_train.npy")
 x_test = np.load("x_test.npy")
 y_test = np.load("y_test.npy")
+'''
 
 
 mobile_net = tf.keras.applications.mobilenet.MobileNet(
@@ -49,18 +60,25 @@ x = tf.keras.layers.Dense(256, activation = "relu")(x)
 #x = tf.keras.layers.Attention(use_scale = True)([x, x])
 x = Attention()(x)
 #x = tf.keras.layers.Dense(256, activation = "relu")(x)
-outputs = tf.keras.layers.Dense(7, activation = "softmax")(x)
+outputs = tf.keras.layers.Dense(9, activation = "softmax")(x)
 model = tf.keras.Model(inputs, outputs)
 
 print(model.summary())
 
-opt = tf.keras.optimizers.AdamW()
+opt = tf.keras.optimizers.AdamW(learning_rate = 1e-3)
 
 model.compile(optimizer = opt, 
-              loss = tf.keras.losses.SparseCategoricalCrossentropy(), 
+              loss = tf.keras.losses.SparseCategoricalCrossentropy(),
+              #loss = tf.keras.losses.BinaryCrossentropy(), 
               metrics = ["accuracy"])
 
-model.fit(x_train, y_train, epochs = 30,
-          batch_size = 64, validation_data = (x_test, y_test))
+model.fit(x_train, y_train, epochs = 100, batch_size = 64, 
+          validation_data = (x_test, y_test))
+# for i in range(1, 11):
+#     model.fit(x_train[:i*len(x_train)//10], y_train[:i*len(y_train)//10], epochs = 3,
+#     batch_size = 64, validation_data = (x_test, y_test))
 
-print(model.predict(x_test))
+# model.fit(x_train, y_train, epochs = 10, 
+#          batch_size = 64, validation_data = (x_test, y_test))
+
+
