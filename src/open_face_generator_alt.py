@@ -1,0 +1,72 @@
+import os
+import numpy as np
+import tqdm
+from util import var
+
+def gen_features(video_path):
+
+    #we run OpenFace's FeatureExtraction executable which extracts the features for each frame in the video and exports them to a csv file.
+    #I tried to see if there way to extract the features for one frame every second but I couldn't find a good way to do that.
+    #In addition to the csv file, it also creates a video file which isn't really necessary either. It ends up taking around 6 seconds on my computer to 
+    #extract the features for a 10 second video which is pretty intensive.
+
+
+    #Right now, it only extracts the 35 action units but we could do things like head pose and eye gaze instead
+    os.system(f"{var.OPENFACE_PATH}FeatureExtraction -f > out {video_path} -aus -pose -gaze")
+    #we get the name of the csv file that the features are stored in
+    feat_file = os.path.join("processed", os.path.basename(video_path)[:-3] + "csv")
+
+    #and load it into a numpy array
+    data = np.genfromtxt(feat_file, invalid_raise = False, delimiter = ",", skip_header = 1)[:300]
+
+    #the first 5 columns contain things like frame # and time stamp which aren't necessary
+    data = data[:,5:]
+    
+    #we fill in any nan values with the averaged feature value over the 10 seconds (I haven't seen any nan values
+    #so far in this dataset but the open face features in the emotiw dataset did have some so this is just in case)
+    col_mean = np.nanmean(data, axis = 0)
+    indices = np.where(np.isnan(data))
+
+    data[indices] = np.take(col_mean, indices[1])
+
+    #The frame rate for the video is 30 fps so for each second, we average the extracted features over the 30 frames
+    data = data.reshape(10, 30, -1).mean(axis = 1)
+
+    #Finally, we remove the folder containing the csv file
+    #os.system("rm -rf processed")
+
+    return data
+
+def video_file_finder(root_directory):
+    video_files = []
+    for dirpath, dirnames, filenames in os.walk(root_directory):
+        for filename in filenames:
+            # Construct the full file path
+            file_path = os.path.join(dirpath, filename)
+            # Print or process the file path
+            os.system(f"echo {filename} >> video_files.txt")
+            video_files.append(file_path)
+    return video_files
+
+def export(dataset, output_file):
+    datapath = os.path.join("..", "..", "datasets", "DAiSEE", "DataSet", dataset)
+   # with open(os.path.join(datapath, dataset + ".txt"), "r") as f:
+      #  video_files = f.read().splitlines()
+    #breakpoint()
+    video_files = video_file_finder(datapath)
+  #  video_files
+    print("Processing " + dataset + " Dataset")
+    with open(output_file, "a") as out_file:
+        for file in tqdm.tqdm(video_files):
+           # video_path = os.path.join(datapath, "Train")#dataset)
+          #  video_path = os.path.join(video_path, file[:6])
+          #  video_path = os.path.join(video_path, file[:-4])
+          #  video_path = os.path.join(video_path, file)
+            
+            data = gen_features(file)
+            np.savetxt(out_file, data, delimiter = ",")
+
+
+export("Train", os.path.join("..", "..", "datasets", "DAiSEE", "DataSet", "Train_OpenFace.csv"))
+export("Validation", os.path.join("..", "..", "datasets", "DAiSEE", "DataSet", "Validation_OpenFace.csv"))
+export("Test", os.path.join("..", "..", "datasets", "DAiSEE", "DataSet", "Test_OpenFace.csv"))
