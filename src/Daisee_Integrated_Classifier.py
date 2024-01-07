@@ -33,43 +33,39 @@ train.loc[train["Boredom"] == 3, "Boredom"] = 2
 #The bigger model takes around 30 seconds to evaluate so I only used it if the haar cascade model couldn't find anything.
 face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_alt.xml")
 
-#This function uses OpenFace to extract high level facial features from the video. Takes in the 
-#path to the video file. Returns a 10x35 numpy array with each row representing the averaged facial features
-#for each second which is used as the input for our focus classifier
 
+train_data_loc = dict()
+val_data_loc = dict()
+
+train_openface = open("..\..\datasets\DAiSEE_openface\Train_openface.csv", "r")
+val_openface = open("..\..\datasets\DAiSEE_openface\Validation_openface.csv", "r")
+            
+for index, line in enumerate(train_openface):
+    if (index % 11) == 0:
+        train_data_loc[line.strip()] = index
+
+for index, line in enumerate(val_openface):
+    if (index % 11) == 0:
+        val_data_loc[line.strip()] = index
+
+
+#This function index into a csv file to obtain the OpenFace features that we had extracted from each video prior to training
+#Takes in the path to the video file. Returns a 10x329 numpy array with each row representing the averaged facial features
+#for each second which is used as the input for our focus classifier
+        
 def gen_features(video_path):
 
-    #we run OpenFace's FeatureExtraction executable which extracts the features for each frame in the video and exports them to a csv file.
-    #I tried to see if there way to extract the features for one frame every second but I couldn't find a good way to do that.
-    #In addition to the csv file, it also creates a video file which isn't really necessary either. It ends up taking around 6 seconds on my computer to 
-    #extract the features for a 10 second video which is pretty intensive.
+    if "Train" in video_path:
+        loc = train_data_loc[os.path.basename(video_path)[:-4]]
+        file = train_openface
+    else:
+        loc = val_data_loc[os.path.basename(video_path)[:-4]]
+        file = val_openface
 
-    #Right now, it only extracts the 35 action units but we could do things like head pose and eye gaze instead
-    os.system(".\..\..\Models\OpenFace_2.2.0_win_x64\FeatureExtraction > $null -f " + video_path + " -aus")
+    file.seek(0)
 
-    #we get the name of the csv file that the features are stored in
-    feat_file = os.path.join("processed", os.path.basename(video_path)[:-3] + "csv")
+    return np.loadtxt(file, skiprows = loc + 1, max_rows = 10, delimiter = ",")
 
-    #and load it into a numpy array
-    data = np.genfromtxt(feat_file, invalid_raise = False, delimiter = ", ", skip_header = 1)[:300]
-
-    #the first 5 columns contain things like frame # and time stamp which aren't necessary
-    data = data[:,5:]
-    
-    #we fill in any nan values with the averaged feature value over the 10 seconds (I haven't seen any nan values
-    #so far in this dataset but the open face features in the emotiw dataset did have some so this is just in case)
-    col_mean = np.nanmean(data, axis = 0)
-    indices = np.where(np.isnan(data))
-
-    data[indices] = np.take(col_mean, indices[1])
-
-    #The frame rate for the video is 30 fps so for each second, we average the extracted features over the 30 frames
-    data = data.reshape(10, 30, 35).mean(axis = 1)
-
-    #Finally, we remove the folder containing the csv file
-    os.system("rd /s /q processed")
-
-    return data
 
 #This function processes the given video file and returns the inputs to the emotion and focus classifier
 #In the emotion classifier, a face detection model is used to crop the face and then downsample to a 48x48
@@ -177,17 +173,23 @@ class FrameGenerator:
 
         #for each video file in the dataset
         for idx in range(len(fnames)):
+            print(idx)
             #we get the path
             path = os.path.join(path_prefix, subset)
             path = os.path.join(path, fnames.iloc[idx][:6])
             path = os.path.join(path, fnames.iloc[idx][:-4])
             path = os.path.join(path, fnames.iloc[idx])
             #and then yield the corresponding inputs to the model and their labels
-            yield load_video(path), np.asarray(labels[:, idx])
+
+            try:
+                inp = load_video(path)
+            except:
+                continue
+            yield inp, np.asarray(labels[:, idx])
         
 
 output_signature = ( (tf.TensorSpec(shape = (10, 48, 48, 1), dtype = tf.float32),
-                      tf.TensorSpec(shape = (10, 35), dtype = tf.float32)),
+                      tf.TensorSpec(shape = (10, 329), dtype = tf.float32)),
                     tf.TensorSpec(shape = (1), dtype = tf.int16))
 
 
@@ -241,7 +243,7 @@ class Emotion_Classifier(Layer):
 class Focus_Classifier(Layer):
     def __init__(self, **kwargs):
         super(Focus_Classifier, self).__init__(**kwargs)
-        inputs = keras.Input(shape = (35))
+        inputs = keras.Input(shape = (329))
         y = keras.layers.Dense(64, activation = "relu")(inputs)
         y = keras.layers.Dense(64, activation = "relu")(y)
         y = keras.layers.Dense(128, activation = "relu")(y)
@@ -280,7 +282,7 @@ class AggregationLayer(Layer):
 #10x35 array of features for our focus classifier
     
 inp_emo = keras.Input((10, 48, 48, 1))
-inp_open = keras.Input((10, 35))
+inp_open = keras.Input((10, 329))
 
 
 emoti_model = Emotion_Classifier()
