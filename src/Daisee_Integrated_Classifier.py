@@ -11,14 +11,18 @@ from PAtt_Lite import Patt_Lite
 from deepface import DeepFace
 import contextlib
 
+physical_devices = tf.config.list_physical_devices('GPU')
+for device in physical_devices:
+    tf.config.experimental.set_memory_growth(device, True)
+
 #This program implements and trains the complete engagement detection model (emotion + focus classifier) on the DAiSEE dataset
 
 #get the train, val, and test dataframes containing the paths to the video files in each dataset as well as the labels
-path_prefix = os.path.abspath("..\..\datasets\DAiSEE")
+path_prefix = os.path.abspath(os.path.join("..", "..", "datasets", "DAiSEE"))
 
-train = pd.read_csv(os.path.join(path_prefix, "Labels\TrainLabels.csv"))
-test = pd.read_csv(os.path.join(path_prefix, "Labels\TestLabels.csv"))
-val = pd.read_csv(os.path.join(path_prefix, "Labels\ValidationLabels.csv"))
+train = pd.read_csv(os.path.join(path_prefix, "Labels", "TrainLabels.csv"))
+test = pd.read_csv(os.path.join(path_prefix, "Labels", "TestLabels.csv"))
+val = pd.read_csv(os.path.join(path_prefix, "Labels", "ValidationLabels.csv"))
 
 #The Boredom labels were a lot more balanced than the Engagement labels so I thought it might be good to use them instead
 #We can switch over to engagement though and make the dataset more balanced if needed
@@ -37,8 +41,8 @@ face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_alt.xml")
 train_data_loc = dict()
 val_data_loc = dict()
 
-train_openface = open("..\..\datasets\DAiSEE_openface\Train_openface.csv", "r")
-val_openface = open("..\..\datasets\DAiSEE_openface\Validation_openface.csv", "r")
+train_openface = open(os.path.join("..", "..", "datasets", "DAiSEE_openface", "Train_OpenFace.csv"), "r")
+val_openface = open(os.path.join("..", "..", "datasets" ,"DAiSEE_openface" ,"Validation_OpenFace.csv"), "r")
             
 for index, line in enumerate(train_openface):
     if (index % 11) == 0:
@@ -151,14 +155,14 @@ class FrameGenerator:
         #we get the path to the dataset
         if self.dataset == "train":
             data = train
-            subset = "DataSet\Train"
+            subset = os.path.join("DataSet", "Train")
             
         elif self.dataset == "val":
             data = val
-            subset = "DataSet\Validation"
+            subset = os.path.join("DataSet", "Validation")
         else:
             data = test
-            subset = "DataSet\Test"
+            subset = os.path.join("DataSet", "Test")
 
         #if we're using a training set then we shuffle the dataset
         if self.dataset == "train":
@@ -173,7 +177,6 @@ class FrameGenerator:
 
         #for each video file in the dataset
         for idx in range(len(fnames)):
-            print(idx)
             #we get the path
             path = os.path.join(path_prefix, subset)
             path = os.path.join(path, fnames.iloc[idx][:6])
@@ -223,7 +226,7 @@ class Emotion_Classifier(Layer):
 
         emoti_model = Patt_Lite().model
         tf.keras.utils.get_custom_objects()["Custom_Attention"] = Custom_Attention
-        emoti_model.load_weights("../../Models/Emotion_Rec/PAtt_Lite_weights.h5")
+        emoti_model.load_weights(os.path.join("..", "..", "Models", "Emotion_Rec", "PAtt_Lite_weights.h5"))
 
         inputs = keras.Input(shape = (48, 48, 1))
         
