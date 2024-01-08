@@ -11,9 +11,6 @@ from PAtt_Lite import Patt_Lite
 from deepface import DeepFace
 import contextlib
 
-physical_devices = tf.config.list_physical_devices('GPU')
-for device in physical_devices:
-    tf.config.experimental.set_memory_growth(device, True)
 
 #This program implements and trains the complete engagement detection model (emotion + focus classifier) on the DAiSEE dataset
 
@@ -135,7 +132,9 @@ def load_video(path, frame_rate = 30):
     
     #we get the open face features
     open_face = gen_features(path)
+    #open_face = (open_face - np.mean(open_face, axis = 0)) / (np.std(open_face, axis = 0))
     
+    #np.nan_to_num(open_face, copy = True, nan = 0.0, posinf = 0, neginf = 0)
     #and then return a tuple with the first entry being the input to our emotion recogntion model and
     #the secodn being the input to our focus detection model
     return (np.array(frames).reshape(10, 48, 48, 1).astype("float32"), open_face.astype("float32"))
@@ -188,22 +187,31 @@ class FrameGenerator:
                 inp = load_video(path)
             except:
                 continue
-            yield inp, np.asarray(labels[:, idx])
+
+            if self.dataset == "train":
+                yield inp, labels[:, idx][0]#labels[:, idx][0]#labels[:, idx]
+            else:
+                yield (inp[0].reshape(1, 10, 48, 48, 1), inp[1].reshape(1, 10, 329)), labels[:, idx]
         
 
-output_signature = ( (tf.TensorSpec(shape = (10, 48, 48, 1), dtype = tf.float32),
+output_signature_train = ( (tf.TensorSpec(shape = (10, 48, 48, 1), dtype = tf.float32),
                       tf.TensorSpec(shape = (10, 329), dtype = tf.float32)),
+                    tf.TensorSpec(shape = (), dtype = tf.int16))
+
+output_signature_eval = ( (tf.TensorSpec(shape = (None, 10, 48, 48, 1), dtype = tf.float32),
+                      tf.TensorSpec(shape = (None, 10, 329), dtype = tf.float32)),
                     tf.TensorSpec(shape = (1), dtype = tf.int16))
 
 
 train_ds = tf.data.Dataset.from_generator(FrameGenerator("train"),
-                                          output_signature = output_signature)
+                                          output_signature = output_signature_train)
 
 val_ds = tf.data.Dataset.from_generator(FrameGenerator("val"),
-                                        output_signature = output_signature)
+                                        output_signature = output_signature_eval)
 
 test_ds = tf.data.Dataset.from_generator(FrameGenerator("test"),
-                                        output_signature = output_signature)
+                                        output_signature = output_signature_eval)
+
 
 BATCH_SIZE = 32
 train_ds = train_ds.batch(BATCH_SIZE)
@@ -247,9 +255,11 @@ class Focus_Classifier(Layer):
     def __init__(self, **kwargs):
         super(Focus_Classifier, self).__init__(**kwargs)
         inputs = keras.Input(shape = (329))
-        y = keras.layers.Dense(64, activation = "relu")(inputs)
-        y = keras.layers.Dense(64, activation = "relu")(y)
-        y = keras.layers.Dense(128, activation = "relu")(y)
+        y = keras.layers.Dense(256, activation = "relu")(inputs)
+        y = keras.layers.Dense(256, activation = "relu")(y)
+        y = keras.layers.Dense(256, activation = "relu")(y)
+        y = keras.layers.Dense(256, activation = "relu")(y)
+        y = keras.layers.Dense(256, activation = "relu")(y)
         y = keras.layers.Dense(3, activation = "relu")(y)
         self.model = Model(inputs, y)
 
@@ -264,6 +274,7 @@ class AggregationLayer(Layer):
     def __init__(self, emo_model, open_model, num_frames, **kwargs):
         super(AggregationLayer, self).__init__(**kwargs)
         self.emoti_model = emo_model
+        #self.emoti_model.trainable = False
         self.open_model = open_model
         self.num_frames = num_frames
     
@@ -272,14 +283,14 @@ class AggregationLayer(Layer):
         #we evaluate our two classifiers on each frame
         emot_outputs = [self.emoti_model(frame) for frame in tf.unstack(inputs[0], axis=1)]
         focus_outputs = [self.open_model(frame) for frame in tf.unstack(inputs[1], axis=1)]
-
+        
         #average the outputs
-        aver_emot_output = tf.reduce_mean(tf.stack(emot_outputs), axis=0)
-        aver_focus_output = tf.reduce_mean(tf.stack(focus_outputs), axis=0)
+        aver_emot_output = tf.reduce_mean(tf.stack(emot_outputs, axis = 1), axis=1)
+        aver_focus_output = tf.reduce_mean(tf.stack(focus_outputs, axis = 1), axis=1)
 
         #and then our output from the aggregation layer are the two 3x1 averaged outputs
         aggregate_output = tf.concat([aver_emot_output, aver_focus_output], axis = 1)
-        return aggregate_output
+        return aggregate_output#aver_focus_output#aver_emot_output#aggregate_output
 
 #our model takes in two inputs, the cropped image for the emotion classifier and the 
 #10x35 array of features for our focus classifier
@@ -304,11 +315,39 @@ model = Model([inp_emo, inp_open], outputs)
 model.summary()
 
 model.compile(loss = tf.keras.losses.SparseCategoricalCrossentropy(),
-              optimizer = keras.optimizers.Adam(learning_rate = 1e-3),
+              optimizer = keras.optimizers.AdamW(learning_rate = 1e-3),
               metrics = ["acc"])
 
-model.fit(train_ds,
-          validation_data = val_ds,
-          epochs = 10,
-          batch_size = 32
+
+#this is the part that doesn't work
+"""
+#here we check to make sure that our model is trainable
+with tf.GradientTape() as tape:
+    #we generate an input for our model
+    a = ([
+        tf.random.normal((1, 10, 48, 48, 1)),
+           tf.random.normal((1, 10, 329))],
+           tf.convert_to_tensor([1], dtype = tf.int16))
+
+    #compute the loss
+    loss = tf.convert_to_tensor(model.evaluate(a[0], a[1])[0], dtype = tf.float32)
+
+#and find the graidents wrt the trainable variables
+gradients = tape.gradient(loss, model.trainable_variables)
+
+for grad, var in zip(gradients, model.trainable_variables):
+    #unfortunately all of the gradients are None and I'm not sure why
+    try:
+        tf.debugging.check_numerics(grad, message=f"{var.name}: ")
+        tf.debugging.assert_greater(tf.math.abs(grad), 0.0)
+    except:
+        print(grad)
+        continue
+"""
+model.fit(train_ds.take(2),
+          #validation_data = val_ds.take(2),
+          epochs = 100,
+          batch_size = BATCH_SIZE
           )
+
+
