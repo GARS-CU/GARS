@@ -8,6 +8,9 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Input, Dense
 from keras import models
 from PAtt_Lite import Patt_Lite
+import sys
+sys.path.append(os.environ['GARS_PROJ'])
+from util import *
 
 class Custom_Attention(tf.keras.layers.Layer):
 
@@ -20,9 +23,10 @@ class Custom_Attention(tf.keras.layers.Layer):
         
 
 #we read in the labels of the split video clips
-df = pd.read_csv("..\..\datasets\EmotiW\Engagement_Labels_Split.csv")
 
-path_prefix = os.path.abspath("..\..\datasets\EmotiW")
+df = pd.read_csv(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "Engagement_Labels_Split.csv"))
+
+path_prefix = os.path.abspath(os.path.join(var.GARS_PROJ, "datasets", "EmotiW"))
     
 #in this function we sample 10 frames from the 10 second clip
 #with one frame being sampled per second
@@ -119,7 +123,7 @@ emoti_model = Patt_Lite()
 
 tf.keras.utils.get_custom_objects()["Custom_Attention"] = Custom_Attention
 
-emoti_model.model.load_weights("../../Models/Emotion_Rec/PAtt_Lite_weights.h5")
+emoti_model.model.load_weights(os.path.join(var.GARS_PROJ, "Models", "Emption_Rec", "PAtt_Lite_weights.h5"))
 
 #unfortunately we weren't really able to find any public engagement datasets
 #that for frame level classification. Instead all of the datasets we found

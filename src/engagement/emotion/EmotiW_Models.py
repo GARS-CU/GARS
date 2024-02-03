@@ -8,15 +8,18 @@ from tensorflow.keras.layers import Embedding, Dense, LSTM
 from tensorflow.keras import regularizers
 from tensorflow.keras import layers
 from sklearn.decomposition import PCA
-
+import sys
+import os
+sys.path.append(os.environ['GARS_PROJ'])
+from util import *
 
 #Here I tested out a couple of models on the dataset (but not really thoroughly)
 
 #load in the datasets
-x_train = np.load("../../datasets/EmotiW/EmotiW_x_train.npy")
-y_train  = np.load("../../datasets/EmotiW/EmotiW_y_train.npy")
-x_test = np.load("../../datasets/EmotiW/EmotiW_x_test.npy")
-y_test = np.load("../../datasets/EmotiW/EmotiW_y_test.npy")
+x_train = np.load(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_x_train.npy"))
+y_train = np.load(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_y_train.npy"))
+x_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_x_test.npy"))
+y_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_y_test.npy"))
 
 #this sets the number of features used by the models. A lot of the open face features seemed somewhat
 #redundant or highly correlated with one another so I thought that doing PCA to reduce the number of features

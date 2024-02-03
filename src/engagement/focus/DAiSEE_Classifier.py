@@ -3,17 +3,20 @@ import pandas as pd
 import cv2
 import numpy as np
 import os
+import sys
+sys.path.append(os.environ['GARS_PROJ'])
+from util import *
 from tensorflow import keras
 from tensorflow.keras import layers
 
-
+"""
 IMG_SIZE = -1
 
-path_prefix = os.path.abspath("..\..\datasets\DAiSEE")
+path_prefix = os.path.abspath(os.path.join("..", "..", "datasets", "DAiSEE"))
 
-train = pd.read_csv(os.path.join(path_prefix, "Labels\TrainLabels.csv"))
-test = pd.read_csv(os.path.join(path_prefix, "Labels\TestLabels.csv"))
-val = pd.read_csv(os.path.join(path_prefix, "Labels\ValidationLabels.csv"))
+train = pd.read_csv(os.path.join(path_prefix, "Labels", "TrainLabels.csv"))
+test = pd.read_csv(os.path.join(path_prefix, "Labels", "TestLabels.csv"))
+val = pd.read_csv(os.path.join(path_prefix, "Labels", "ValidationLabels.csv"))
 
 train_paths = train["ClipID"]
 val_paths = val["ClipID"]
@@ -58,14 +61,14 @@ class FrameGenerator:
         
         if self.dataset == "train":
             data = train
-            subset = "DataSet\Train"
+            subset = os.path.join("DataSet", "Train")
             
         elif self.dataset == "val":
             data = val
-            subset = "DataSet\Validation"
+            subset = os.path.join("DataSet", "Validation")
         else:
             data = test
-            subset = "DataSet\Test"
+            subset = os.path.join("DataSet", "Test")
 
         if self.training:
             data = data.sample(frac = 1).reset_index(drop = True)
@@ -97,8 +100,27 @@ val_ds = tf.data.Dataset.from_generator(FrameGenerator("val"),
 test_ds = tf.data.Dataset.from_generator(FrameGenerator("test"),
                                         output_signature = output_signature)
 
-        
-inputs = keras.Input((10, 480, 640, 3))
+"""
+
+path_prefix = os.path.join(var.GARS_PROJ, "datasets", "DAiSEE", "DataSet")
+
+x_train = np.load(os.path.join(path_prefix, "Train", "emotion_large.npy"))/255.0
+y_train = np.load(os.path.join(path_prefix, "Train", "labels.npy"))
+
+indices = np.array(list(range(len(x_train))))
+indices = np.random.choice(indices, size = int(0.2*len(x_train)), replace = False)
+x_val = x_train[indices]
+y_val = y_train[indices]
+x_train = np.delete(x_train, indices, axis = 0)
+y_train = np.delete(y_train, indices, axis = 0)
+#x_val = np.load(os.path.join(path_prefix, "Validation", "emotion_large.npy"))
+#y_val = np.load(os.path.join(path_prefix, "Validation", "labels.npy"))
+
+
+y_train[y_train == 3] = 2
+y_val[y_val == 3] = 2
+
+inputs = keras.Input((10, 100, 100, 1))
 
 x = layers.Conv3D(filters = 64, kernel_size = 3, activation = "relu", padding = "SAME")(inputs)
 x = layers.AveragePooling3D(pool_size = 2)(x)
@@ -116,19 +138,19 @@ x = layers.GlobalAveragePooling3D()(x)
 x = layers.Dense(units=512, activation="relu")(x)
 x = layers.Dropout(0.3)(x)
 
-outputs = layers.Dense(units = 4, activation = "softmax")(x)
+outputs = layers.Dense(units = 3, activation = "softmax")(x)
 
 model = keras.Model(inputs, outputs)
 
-
+model.summary()
 model.compile(loss = tf.keras.losses.SparseCategoricalCrossentropy(),
               optimizer = keras.optimizers.Adam(learning_rate = 1e-3),
               metrics = ["acc"])
 
-epochs = 50
+epochs = 300
 
-model.fit(train_ds,
-          validation_data = val_ds,
+model.fit(x_train, y_train,
+          validation_data = (x_val, y_val),
           epochs = epochs,
           batch_size = 32
           )

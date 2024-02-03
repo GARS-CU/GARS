@@ -3,13 +3,17 @@ from time import sleep
 import os
 import pandas as pd
 import csv
+import sys
+sys.path.append(os.environ['GARS_PROJ'])
+from util import *
 
 #this script splits each of the emotiw videos and converts them into 10 second clips
 
 #each of these clips will be assumed to be representative of the entire video that they 
 #came from and will be given the same label as the entire video. If necessary, we can
 #try increasing the length of each clip to maybe 15-20 seconds
-df = pd.read_excel("../../datasets/EmotiW/Engagement_Labels_Engagement.xlsx", names = ["Filename", "Scores"], header = None)
+
+df = pd.read_excel(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "Engagement_Labels_Engagement.xlsx"), names = ["Filename", "Scores"], header = None)
 
 df = df.set_index("Filename").T.to_dict("list")
 
@@ -22,7 +26,7 @@ scores = dict()
 def split_video(fname, dataset):
     global scores
     #get the relative path to the source video
-    set_path = os.path.join("..\..\datasets\EmotiW", dataset)
+    set_path = os.path.join(var.GARS_PROJ, "datasets", "EmotiW", dataset)
     source_path = os.path.join(set_path, fname)
     
     current_duration = VideoFileClip(source_path).duration
@@ -51,7 +55,7 @@ def split_video(fname, dataset):
 #in a given directory
 def extract_dataset(set):
 
-    set_path = os.path.join("..\..\datasets\EmotiW", set)
+    set_path = os.path.join(var.GARS_PROJ, "datasets", "EmotiW", set)
     for fname in os.listdir(set_path):
         if os.path.isfile(os.path.join(set_path, fname)):
             split_video(fname,set)
@@ -64,7 +68,7 @@ extract_dataset("Validation")
 col_names = ["Path", "Score", "Dataset"]
 
 #and then we write the labels to a csv file
-with open("..\..\datasets\EmotiW\Engagement_Labels_Split.csv", "w") as csvfile:
+with open(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "Engagement_Labels_Split.csv"), "w") as csvfile:
     writer = csv.writer(csvfile)
     writer.writerow(col_names)
     writer.writerows(scores.values())

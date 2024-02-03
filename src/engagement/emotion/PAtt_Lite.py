@@ -2,6 +2,9 @@ import tensorflow as tf
 import os
 import numpy as np
 from matplotlib import pyplot as plt
+import sys
+sys.path.append(os.environ['GARS_PROJ'])
+from util import *
 
 class Attention(tf.keras.layers.Layer):
 
@@ -48,11 +51,11 @@ class Patt_Lite:
 
 
     def train(self):
-        x_train = np.load("../../datasets/FERP/FERP_xtrain.npy")
-        y_train = np.load("../../datasets/FERP/FERP_ytrain.npy")
-        x_test = np.load("../../datasets/FERP/FERP_xtest.npy")
-        y_test = np.load("../../datasets/FERP/FERP_ytest.npy")    
-            
+        x_train = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtrain.npy"))
+        y_train = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_ytrain.npy"))
+        x_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtest.npy"))
+        y_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtest.npy"))    
+
 
         y_train = np.argmax(y_train, axis = 1)
         y_test = np.argmax(y_test, axis = 1)
@@ -77,9 +80,9 @@ class Patt_Lite:
         plt.ylabel("Accuracy")
         plt.legend(["Train", "Validation"], loc = "upper left")
 
-        plt.savefig("../../Models/Emotion_Rec/PAtt_Lite_Accuracy.pdf")
+        plt.savefig(os.path.join(var.GARS_PROJ, "Models", "Emotion_Rec", "PAtt_Lite_Accuracy_Pres.pdf"))
         
-        self.model.save("../../Models/Emotion_Rec/PAtt_Lite_weights.h5")
+        self.model.save(os.path.join(var.GARS_PROJ, "Models", "Emotion_Rec", "PAtt_Lite_weights.h5"))
         
 
 

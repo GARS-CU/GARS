@@ -2,13 +2,17 @@ import pandas as pd
 import os
 from tqdm import tqdm
 import numpy as np
+import sys
+sys.path.append(os.environ['GARS_PROJ'])
+from util import *
 
 ############################ EmotiW Preprocessing Script ############################
 #generates .npy files for the train and test set need to have the
 #OpenFace_features folder and Engagement_Labels_Engagement.xlsx file in the same directory as this script
 
 #we read in the file and convert to a dictionary
-scores = pd.read_excel("../../datasets/EmotiW/Engagement_Labels_Engagement.xlsx", names = ["Filename", "Scores"], header = None)
+
+scores = pd.read_excel(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "Engagement_Labels_Engagement.xlsx"), names = ["Filename", "Scores"], header = None)
 
 scores = scores.set_index("Filename").T.to_dict("list")
 
@@ -92,8 +96,8 @@ def generate_data(src_path):
 
     return x[:index], y[:index]
 
-val_path = os.path.join("../../datasets/EmotiW/OpenFace_features", "validation")
-train_path = "../../datasets/EmotiW/OpenFace_features\Train"
+val_path = os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "OpenFace_Features", "validation")
+train_path = os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "OpenFace_Features", "Train")
 
 #we generate the train and test set
 x_train, y_train = generate_data(train_path)
@@ -121,7 +125,8 @@ x_test = x_test.reshape(x_test.shape[0]//10, 10, 429)
 y_test = np.array(y_test)
 
 #export the numpy files
-np.save("../../datasets/EmotiW/EmotiW_x_train.npy", x_train)
-np.save("../../datasets/EmotiW/EmotiW_y_train.npy", y_train)
-np.save("../../datasets/EmotiW/EmotiW_x_test.npy", x_test)
-np.save("../../datasets/EmotiW/EmotiW_y_test.npy", y_test)
+
+np.save(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_x_train.npy"), x_train)
+np.save(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_y_train.npy"), y_train)
+np.save(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_x_test.npy"), x_test)
+np.save(os.path.join(var.GARS_PROJ, "datasets", "EmotiW", "EmotiW_y_test.npy"), y_test)

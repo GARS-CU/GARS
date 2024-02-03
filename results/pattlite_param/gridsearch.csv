@@ -1,0 +1,2 @@
+dropout_rate,learning_rate,val_accuracy,val_loss
+0.3,0.001,0.6325267553329468,1.0816494226455688
