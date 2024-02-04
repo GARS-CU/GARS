@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import sys
 sys.path.append(os.environ['GARS_PROJ'])
+sys.path.insert(0, os.path.abspath(".."))
 from util import *
 
 class Attention(tf.keras.layers.Layer):
