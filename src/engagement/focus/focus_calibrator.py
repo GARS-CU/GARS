@@ -17,10 +17,11 @@ class Focus_Calibrator:
         self.gaze_angle_ymin = gaze_angle_x.min()
         self.gaze_angle_ymax = gaze_angle_y.max()
         self.gaze_angle_ycenter = (self.gaze_angle_ymax + self.gaze_angle_ymin)/2
-        breakpoint()
+      
 
         
     def __call__(self, gaze_angle_x, gaze_angle_y) -> int:
+
         return 2
     
 
