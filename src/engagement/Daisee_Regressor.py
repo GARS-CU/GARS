@@ -120,7 +120,7 @@ class Focus_Regressor(Layer):
         x = keras.layers.MaxPooling2D()(x)
         x = keras.layers.Conv2D(128, 5, activation = "relu")(x)
         x = keras.layers.MaxPooling2D()(x)
-        x = keras.layers.Conv2D(256, 5, activation = "relu")(x)
+        x = keras.layers.Conv2D(128, 5, activation = "relu")(x)
         x = keras.layers.MaxPooling2D()(x)
         x = keras.layers.Dropout(0.25)(x)
         x = keras.layers.Flatten()(x)
