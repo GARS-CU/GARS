@@ -45,14 +45,14 @@ def assemble():
 
     train_open, val_open = get_open()
 
-    y_train = np.load(os.path.join(path, "Train", "Boredom_all_frames_Labels.npy"))
-    y_val = np.load(os.path.join(path, "Validation", "Boredom_all_frames_Labels.npy"))
+    y_train = np.load(os.path.join(path, "Train", "Engagement_all_frames_Labels.npy"))
+    y_val = np.load(os.path.join(path, "Validation", "Engagement_all_frames_Labels.npy"))
 
     return (train_emotion, train_open), y_train, (val_emotion, val_open), y_val
 
 def build_dataset():
     x_train, y_train, x_val, y_val = assemble()
-
+    """
     y_train[y_train == 3] = 2
     y_val[y_val == 3] = 2
 
@@ -65,9 +65,10 @@ def build_dataset():
     x_train = (x_train[0][indices], x_train[1][indices])
     
     y_train = y_train[indices]
-    y_train = y_train/3 + (1/3)
-    y_val = y_val/3  + (1/3)
-
+    """
+    y_train = y_train/3
+    y_val = y_val/3
+    
     return x_train, y_train, x_val, y_val
 
 
@@ -123,7 +124,7 @@ class Focus_Regressor(Layer):
         x = keras.layers.MaxPooling2D()(x)
         x = keras.layers.Dropout(0.25)(x)
         x = keras.layers.Flatten()(x)
-        x = keras.layers.Dense(128, activation = "relu")(x)
+        x = keras.layers.Dense(256, activation = "relu")(x)
         x = keras.layers.Dropout(0.5)(x)
         x = keras.layers.Dense(1)(x)
 
@@ -173,7 +174,7 @@ model = Model([inp_emo, inp_open], output)
 model.summary()
 
 model.compile(loss = "mean_squared_error",
-              optimizer = keras.optimizers.AdamW(learning_rate = 1e-3),
+              optimizer = keras.optimizers.AdamW(learning_rate = 5e-4),
               metrics = ["mse"])
 
 x_train, y_train, x_val, y_val = build_dataset()

@@ -5,9 +5,11 @@ from tensorflow import keras
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Input, Dense
 from keras import models
+import sys
+sys.path.insert(0, os.path.abspath("emotion"))
+sys.path.insert(0, os.path.abspath("/.."))
 from PAtt_Lite import Patt_Lite
 import pandas as pd
-import sys
 sys.path.append(os.environ['GARS_PROJ'])
 from util import *
 
@@ -48,6 +50,15 @@ def build_dataset(dataset):
     labels = labels[indices]
     
     #labels[labels == 3] = 2
+    
+    emotion_features = emotion_features.reshape(-1, 48, 48)
+    
+    open_features = open_features.reshape(-1, 709)
+    
+
+    labels = np.array(sum([[labels[index] for i in range(10)] for index in range(len(labels))], []))
+
+    labels = labels/3 + (1/3)
     
     return [emotion_features, open_features], labels
 
@@ -119,6 +130,8 @@ class Focus_Classifier(Layer):
         inputs = keras.Input(shape = (709))
         y = keras.layers.Dense(256, activation = "relu")(inputs)
         y = keras.layers.Dense(256, activation = "relu")(y)
+
+        #y = keras.layers.Dense(1)(y)
         #y = keras.layers.Dense(256, activation = "relu")(y)
         #y = keras.layers.Dense(3, activation = "relu")(y)
         self.model = Model(inputs, y)
@@ -140,22 +153,24 @@ class AggregationLayer(Layer):
     def __call__(self, inputs):
 
         #we evaluate our two classifiers on each frame
-        emot_outputs = [self.emoti_model(frame) for frame in tf.unstack(inputs[0], axis=1)]
-        focus_outputs = [self.open_model(frame) for frame in tf.unstack(inputs[1], axis=1)]
-
+        #emot_outputs = [self.emoti_model(frame) for frame in tf.unstack(inputs[0], axis=1)]
+        #focus_outputs = [self.open_model(frame) for frame in tf.unstack(inputs[1], axis=1)]
+        
+        emot_output = self.emoti_model(inputs[0])
+        focus_output = self.open_model(inputs[1])
         #average the outputs
-        aver_emot_output = tf.reduce_mean(tf.stack(emot_outputs), axis=0)
-        aver_focus_output = tf.reduce_mean(tf.stack(focus_outputs), axis=0)
+        #aver_emot_output = tf.reduce_mean(tf.stack(emot_outputs), axis=0)
+        #aver_focus_output = tf.reduce_mean(tf.stack(focus_outputs), axis=0)
 
         #and then our output from the aggregation layer are the two 3x1 averaged outputs
-        aggregate_output = tf.concat([aver_emot_output, aver_focus_output], axis = 1)
-        return aver_emot_output#aggregate_output
+        aggregate_output = tf.concat([emot_output, focus_output], axis = 1)
+        return aggregate_output#aver_emot_output#aggregate_output
 
 #our model takes in two inputs, the cropped image for the emotion classifier and the 
 #10x35 array of features for our focus classifier
     
-inp_emo = keras.Input((10, 48, 48, 1))
-inp_open = keras.Input((10, 709))
+inp_emo = keras.Input((48, 48, 1))
+inp_open = keras.Input((709))
 
 
 emoti_model = Emotion_Classifier()
@@ -166,17 +181,17 @@ y = AggregationLayer(emoti_model, focus_model, 10)([inp_emo, inp_open])
 #we add a dense layer after our aggregation model so that the outputs from the emotion and focus classifiers
 #are combined together
 y = Dense(128, activation = "relu")(y)
-outputs = Dense(3, activation = "softmax")(y)
+outputs = Dense(1)(y)
 
 
 model = Model([inp_emo, inp_open], outputs)
 
 model.summary()
 
-model.compile(loss = tf.keras.losses.SparseCategoricalCrossentropy(),
+model.compile(loss = "mean_squared_error",
         
         optimizer = keras.optimizers.AdamW(learning_rate = 1e-3),
-              metrics = ["acc"])
+              metrics = ["mse"])
 
 #print(y_val)
 #results = model.predict(x_val)
