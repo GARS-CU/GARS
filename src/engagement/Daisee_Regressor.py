@@ -66,8 +66,12 @@ def build_dataset():
     
     y_train = y_train[indices]
     """
-    y_train = y_train/3
-    y_val = y_val/3
+    #0, 1, 2, 3 => 0, 2/3, 4/3, 2 => -1, -1/3, 1/3, 1
+    #0, 1/3, 2/3, 1 => -1, -1/3, 1/3, 1
+    #0, 2/3, 4/3, 2, -1, -1/3, 1/3, 1
+    
+    y_train = y_train*2/3 - 1
+    y_val = y_val*2/3 - 1
     
     return x_train, y_train, x_val, y_val
 
@@ -174,7 +178,7 @@ model = Model([inp_emo, inp_open], output)
 model.summary()
 
 model.compile(loss = "mean_squared_error",
-              optimizer = keras.optimizers.AdamW(learning_rate = 5e-4),
+              optimizer = keras.optimizers.AdamW(learning_rate = 3e-5),
               metrics = ["mse"])
 
 x_train, y_train, x_val, y_val = build_dataset()
