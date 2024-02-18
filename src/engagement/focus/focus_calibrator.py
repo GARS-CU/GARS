@@ -30,10 +30,12 @@ class Focus_Calibrator:
 
         return gaze_angle_x, gaze_angle_y
         
-    def __call__(self, gaze_angle_x, gaze_angle_y) -> int:
+    def __call__(self, openface_csv_path):
         """function used to determine focus on a linear scale.
         determines fraction of distance from center of focus to outside focus
         on a linear scale."""
+        gaze_angle_x, gaze_angle_y = self.openface_to_numpy(openface_csv_path)
+
         distance = lambda x, y : np.sqrt((x)**2 + (y)**2)
         #find distance from center
         x_distance = (gaze_angle_x-self.gaze_angle_xcenter) 
@@ -41,7 +43,7 @@ class Focus_Calibrator:
         distance_from_center_to_gaze = distance(x_distance, y_distance)
         
 
-        
+        x_distance[x_distance == 0] = 1e-32
         slope = y_distance/x_distance
         
         b = self.gaze_angle_ycenter-slope*self.gaze_angle_xcenter
@@ -51,34 +53,33 @@ class Focus_Calibrator:
       
     
         #right wall
-        right_mask = (radians <= math.pi/4) and (radians > -math.pi/4)
+        right_mask = (radians <= np.pi/4) & (radians > -np.pi/4)
 
         y_right_wall = slope[right_mask]*self.gaze_angle_xmax+b[right_mask]
         distance_from_center[right_mask] = distance(self.gaze_angle_xmax-self.gaze_angle_xcenter, y_right_wall - self.gaze_angle_ycenter)
         
         #upper wall
-        upper_mask = (radians > math.pi/4) and (radians <= 3*math.pi/4)
+        upper_mask = (radians > np.pi/4) & (radians <= 3*np.pi/4)
         x_upper_wall = (self.gaze_angle_ymax - b[upper_mask])/slope[upper_mask]
         distance_from_center[upper_mask] = distance(x_upper_wall -self.gaze_angle_xcenter, self.gaze_angle_ymax - self.gaze_angle_ycenter)
         
         
         #left wall
-        left_mask = (radians > (3*np.pi/4) and radians >= -3*np.pi/4)
-        y_left_wall = slope[left_mask]*self.gaze_angle_xmin+b
+        left_mask = (radians > (3*np.pi/4)) & (radians >= -3*np.pi/4)
+        y_left_wall = slope[left_mask]*self.gaze_angle_xmin+b[left_mask]
         distance_from_center[left_mask] = distance(self.gaze_angle_xmin - self.gaze_angle_xcenter, y_left_wall - self.gaze_angle_ycenter)
     
-
-        #bottom wall
-        bottom_mask = radians < -np.pi/4 and radians >= -(3*np.pi/4)
+        #breakpoint()
+        
+        bottom_mask = (radians < -np.pi/4) & (radians >= -(3*np.pi/4))
         y_bottom_wall = (self.gaze_angle_ymax - b[bottom_mask])/slope[bottom_mask]
-  
+     
         distance_from_center[bottom_mask] = distance( y_bottom_wall  - self.gaze_angle_xcenter, self.gaze_angle_ymin - self.gaze_angle_ycenter)
     
         eye_gaze_focus = 1 - (distance_from_center_to_gaze/distance_from_center)    
 
         return eye_gaze_focus
-    
-
+gaze_tracker = Focus_Calibrator('~/processed/demo.csv') 
+gaze_tracker('~/processed/demo.csv')
 
         
-print(Focus_Calibrator('~/processed/demo.csv')(np.array([-0.2]), np.array([0.06]))) 
