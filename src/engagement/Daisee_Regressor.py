@@ -13,6 +13,9 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
 sys.path.append(os.environ['GARS_PROJ'])
 from util import *
+import matplotlib.pyplot as plt
+import pickle as pk
+
 path = os.path.join(var.GARS_PROJ, "datasets", "DAiSEE", "DataSet")
 
 
@@ -27,7 +30,8 @@ def get_open():
 
     #apply pca to get a 300x300 array of features
     train_open = pca.fit_transform(train_open)
-
+    
+    pk.dump(pca, open(os.path.join(var.GARS_PROJ, "Models", "Integrated_Model", "pca.pkl"), "wb"));
     train_open = np.reshape(train_open, (-1, 300, 300, 1))
 
     val_open = np.load(os.path.join(path, "Validation", "openface_all_frames_features.npy"))
@@ -70,8 +74,10 @@ def build_dataset():
     #0, 1/3, 2/3, 1 => -1, -1/3, 1/3, 1
     #0, 2/3, 4/3, 2, -1, -1/3, 1/3, 1
     
-    y_train = y_train*2/3 - 1
-    y_val = y_val*2/3 - 1
+    y_train = y_train/3;
+    y_val = y_val/3;
+    #y_train = y_train*2/3 - 1
+    #y_val = y_val*2/3 - 1
     
     return x_train, y_train, x_val, y_val
 
@@ -163,29 +169,56 @@ class AggregationLayer(Layer):
         return aggregate_output#tf.math.reduce_mean(aggregate_output, axis = 1)
 
 
-inp_emo = keras.Input((10, 48, 48, 1))
-inp_open = keras.Input((300, 300, 1))
+class Engagement_Classifier:
 
-emoti_model = Emotion_Regressor()
-focus_model = Focus_Regressor()
+    def __init__(self):
 
-x = AggregationLayer(emoti_model, focus_model, 10)([inp_emo, inp_open])
+        inp_emo = keras.Input((10, 48, 48, 1))
+        inp_open = keras.Input((300, 300, 1))
 
-output =  Dense(1)(x)
+        emoti_model = Emotion_Regressor()
+        focus_model = Focus_Regressor()
 
-model = Model([inp_emo, inp_open], output)
+        x = AggregationLayer(emoti_model, focus_model, 10)([inp_emo, inp_open])
 
-model.summary()
+        output =  Dense(1)(x)
 
-model.compile(loss = "mean_squared_error",
-              optimizer = keras.optimizers.AdamW(learning_rate = 3e-5),
-              metrics = ["mse"])
+        self.model = Model([inp_emo, inp_open], output)
 
 x_train, y_train, x_val, y_val = build_dataset()
 
-model.fit(x = x_train,
-          y = y_train,
-          validation_data = (x_val, y_val),
-          epochs = 100,
-          batch_size = 16
-          )
+minLoss = float("inf")
+for step_size in np.arange(1e-4, 1e-3, 1e-4):
+        classifier = Engagement_Classifier();
+        classifier.model.summary();
+        opt = tf.keras.optimizers.AdamW(learning_rate = step_size)
+
+        callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=2)
+        classifier.model.compile(optimizer = opt,
+            loss = "mse",
+            #loss = tf.keras.losses.BinaryCrossentropy(),
+            metrics = ["mse"])
+
+        history = classifier.model.fit(x_train, y_train, epochs = 100, batch_size = 16,
+                validation_data = (x_val, y_val), callbacks = [callback])
+        
+        loss = classifier.model.evaluate(x_val, y_val)[0]
+
+        print(loss)
+
+        if loss < minLoss:
+            minLoss = loss
+            optSize = step_size
+            optHistory = history
+            optModel = classifier.model
+
+plt.plot(history.history["mse"])
+plt.plot(history.history["val_mse"])
+plt.title("Model Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend(["Train", "Validation"], loc = "upper left")
+
+plt.savefig(os.path.join(var.GARS_PROJ, "Models", "Integrated_Model", "Engagement_Model_Results.pdf"))
+
+optModel.save(os.path.join(var.GARS_PROJ, "Models", "Integrated_Model", "Engagement_Model_weights.h5"))
