@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import sys
 import os
+sys.path.insert(0, os.path.abspath("/.."))
 sys.path.append(os.environ['GARS_PROJ'])
 from util import *
 
@@ -17,7 +18,7 @@ for index, row in df.iterrows():
 
     if row["NF"] == 0:
         dataset[count] = np.reshape(np.array(row["pixels"].split(" "), dtype=  float), (48, 48, 1))
-        labels.append([df.iloc[index, categ]/10 for categ in range(4, 13)])
+        labels.append([df.iloc[index, categ]/10 for categ in range(3, 13)])
         count += 1
 
 dataset = dataset[:count]
