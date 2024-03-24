@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import sys
 import os
-sys.path.insert(0, os.path.abspath("/.."))
+sys.path.append(os.path.abspath("../.."))
 sys.path.append(os.environ['GARS_PROJ'])
 from util import *
 
@@ -26,6 +26,8 @@ labels = np.array(labels)
 
 x_train, x_test, y_train, y_test = train_test_split(dataset, labels, test_size = .2)
 x_val, x_test, y_val, y_test = train_test_split(dataset, labels, test_size = .2)
+
+print(y_val.shape)
                   
 np.save(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtrain.npy"), x_train)
 np.save(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_ytrain.npy"), y_train)

@@ -25,13 +25,13 @@ sess = tf.compat.v1.Session(config=config)
 #with a sequence length of 10 i think there were around 90,000 sequences
 #which should be large enough to train on i think but if not we can try 
 #decreasing the sequence length
-SEQUENCE_LENGTH = 10
+SEQUENCE_LENGTH = 5
 PADDING = np.reshape(np.array([0 for i in range(4096)]), (1, 4096))
 START = np.reshape(np.array([-1 for i in range(4096)]), (1, 4096))
 #path to the behance dataset files
 rec_path = os.path.join(var.GARS_PROJ, "datasets", "Behance")
 
-INPUT_DIM = 700
+INPUT_DIM = 500
 BATCH_SIZE  =10
 def groupAppreciates():
         #we load in the dictionary which maps each user id to the list of indices into the numpy array
@@ -133,6 +133,8 @@ def prepare_data():
 
 x_train, y_train, x_val, y_val, x_test, y_test=  prepare_data()
 
+print(x_train.shape)
+print(x_val.shape)
 class DataGenerator(Sequence):
     def __init__(self, x_set, y_set, batch_size):
         self.x = x_set

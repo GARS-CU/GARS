@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import sys
 sys.path.append(os.environ['GARS_PROJ'])
-sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, os.path.abspath("../.."))
 from util import *
 
 class Attention(tf.keras.layers.Layer):
@@ -44,7 +44,7 @@ class Patt_Lite:
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
         x = tf.keras.layers.Dense(256, activation = "relu")(x)
         x = Attention()(x)
-        outputs = tf.keras.layers.Dense(9, activation = "softmax")(x)
+        outputs = tf.keras.layers.Dense(10, activation = "softmax")(x)
 
         self.model = tf.keras.Model(inputs, outputs)
 
@@ -55,11 +55,14 @@ class Patt_Lite:
         x_train = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtrain.npy"))
         y_train = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_ytrain.npy"))
         x_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtest.npy"))
-        y_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_xtest.npy"))    
+        y_test = np.load(os.path.join(var.GARS_PROJ, "datasets", "FERP", "FERP_ytest.npy"))    
 
 
         y_train = np.argmax(y_train, axis = 1)
         y_test = np.argmax(y_test, axis = 1)
+
+        print(y_test)
+        print(y_test.shape)
 
         opt = tf.keras.optimizers.AdamW(learning_rate = 1e-3)
 
@@ -71,7 +74,7 @@ class Patt_Lite:
                 #loss = tf.keras.losses.BinaryCrossentropy(), 
                 metrics = ["accuracy"])
 
-        history = self.model.fit(x_train, y_train, epochs = 1, batch_size = 10, 
+        history = self.model.fit(x_train, y_train, epochs = 125, batch_size = 10, 
             validation_data = (x_test, y_test), callbacks = [callback])
         
         plt.plot(history.history["accuracy"])
@@ -81,11 +84,7 @@ class Patt_Lite:
         plt.ylabel("Accuracy")
         plt.legend(["Train", "Validation"], loc = "upper left")
 
-        plt.savefig(os.path.join(var.GARS_PROJ, "Models", "Emotion_Rec", "PAtt_Lite_Accuracy_Pres.pdf"))
+        plt.savefig(os.path.join(var.GARS_PROJ, "Models", "Emotion_Rec", "PAtt_Lite_Accuracy.pdf"))
         
         self.model.save(os.path.join(var.GARS_PROJ, "Models", "Emotion_Rec", "PAtt_Lite_weights.h5"))
         
-
-
-#model = Patt_Lite()
-#model.train()
