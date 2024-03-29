@@ -2,6 +2,6 @@
 #from enum import StrEnum
 import os
 class var():
-     OPENFACE_PATH = "sudo docker exec openface_docker /home/openface-build/build/bin/"
+     OPENFACE_PATH = "docker exec openface_docker /home/openface-build/build/bin/"
      GARS_PROJ = os.environ['GARS_PROJ']
         
