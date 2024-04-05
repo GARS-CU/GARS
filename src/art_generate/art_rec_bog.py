@@ -98,8 +98,6 @@ class ArtRecSystem:
         # rec_matr = np.zeros((len(self._user_matrix), 768))
         # last sample stage recomendation
         self.scoring(rating, self._cur_embeddings)
-        if self._iteration != self._user_sample_stage_size:
-            self._user_matrix *= self._decay_rate
 
         closest_subject = self.knn_subjects.kneighbors([self._user_matrix[0]])[1]
         closest_artist_and_movement = self.knn_artists_and_movements.kneighbors(
@@ -117,6 +115,9 @@ class ArtRecSystem:
             )
         ).squeeze()
         # breakpoint()
+        if self._iteration != self._user_sample_stage_size:
+            self._user_matrix *= self._decay_rate
+
         self._cur_embeddings = self._all_embeddings[indices]
 
         return self._plaintext_words[indices]
