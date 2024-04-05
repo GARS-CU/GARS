@@ -125,7 +125,7 @@ class ArtRecSystem:
     def moving_cosine_dist(self, rating, embeddings):
         self._user_matrix += float(rating) * embeddings
 
-    def __call__(self, rating=None) -> str:
+    def __call__(self, rating=0) -> str:
         """function to get recommendation given a rating"""
 
         # sampling stage
@@ -134,14 +134,6 @@ class ArtRecSystem:
             return self.sampling_stage(rating)
 
         return self.find_closest(rating)
-
-        return None
-        embeddings, words = self.find_closest()
-
-        print(f"here are chosen words {words}")
-        rating = input("rate from -1 to 1:")
-        self._user_matrix += float(rating) * embeddings
-        self._user_matrix *= self._decay_rate
 
     def sampling_stage(self, rating):
         # cold starting rec system
