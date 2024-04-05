@@ -21,6 +21,7 @@ class ArtRecSystem:
         decay_rate=0.6,
         sample_size=10,
         sample_stage_size=5,
+        max_jump=1 / 3,
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
         self._sample_size = sample_size
@@ -32,6 +33,7 @@ class ArtRecSystem:
         self._all_embeddings = np.load("data_prompts/numpy/all_embeddings.npy")
         self._metric = metric
         self._iteration = 0
+        self._max_jump = 1 / 3
         self_cur_embeddings = np.zeros(
             (6, 768)
         )  # current embeddings of words that were recommended
@@ -119,8 +121,14 @@ class ArtRecSystem:
 
         return self._plaintext_words[indices]
 
+    def max_jump(self):
+        """Can be used to make more dynamic jumping"""
+        return self._max_jump
+
     def moving_euclidean(self, rating, embeddings):
-        self._user_matrix = (embeddings - self._user_matrix) * float(rating)
+        self._user_matrix += (
+            (embeddings - self._user_matrix) * float(rating) * self.max_jump
+        )
 
     def moving_cosine_dist(self, rating, embeddings):
         self._user_matrix += float(rating) * embeddings
@@ -198,7 +206,9 @@ if __name__ == "__main__":
     with open("data_prompts/categories/subjects.txt") as f:
         subjects = f.read().split("\n")
 
-    with open("data_prompts/open-prompts/modifiers/art/descriptive terms.txt", "r") as f:
+    with open(
+        "data_prompts/open-prompts/modifiers/art/descriptive terms.txt", "r"
+    ) as f:
         descriptive_words = f.read().split("\n")
     # from #https://www.smore.com/n/st133-art-vocabulary-adjectives
     with open("data_prompts/categories/descriptive_words_more.txt") as f:
