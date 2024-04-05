@@ -28,8 +28,8 @@ class ArtRecSystem:
         self._matrices = np.zeros((40, 6, 768))
         self._user_matrix = np.zeros((6, 768))
         self._cur_embeddings = np.zeros((6, 768))  # currently recommended words
-        self._plaintext_words = np.load("data/numpy/plaintext_words.npy")
-        self._all_embeddings = np.load("data/numpy/all_embeddings.npy")
+        self._plaintext_words = np.load("data_prompts/numpy/plaintext_words.npy")
+        self._all_embeddings = np.load("data_prompts/numpy/all_embeddings.npy")
         self._metric = metric
         self._iteration = 0
         self_cur_embeddings = np.zeros(
@@ -185,33 +185,30 @@ def test_system():
         )
 
 
-test_system()
-
-
 # change to main to get embeddings if they are not there
-if __name__ == "__tmain__":
+if __name__ == "__main__":
     from sentence_transformers import SentenceTransformer
 
     ## [DESCRIPTIVE TERM] OF [SUBJECT] [?Location] [MEDIUM] [MODIFIERS] [2] [3]
 
-    with open("./data/categories/artists.txt") as f:
+    with open("./data_prompts/categories/artists.txt") as f:
         artists = f.read().split("\n")
 
     # getting descriptive words
-    with open("data/categories/subjects.txt") as f:
+    with open("data_prompts/categories/subjects.txt") as f:
         subjects = f.read().split("\n")
 
-    with open("data/open-prompts/modifiers/art/descriptive terms.txt", "r") as f:
+    with open("data_prompts/open-prompts/modifiers/art/descriptive terms.txt", "r") as f:
         descriptive_words = f.read().split("\n")
     # from #https://www.smore.com/n/st133-art-vocabulary-adjectives
-    with open("data/categories/descriptive_words_more.txt") as f:
+    with open("data_prompts/categories/descriptive_words_more.txt") as f:
         descriptive_words.extend(f.read().split("\n"))
 
-    with open("data/open-prompts/modifiers/art/art movements.txt") as f:
+    with open("data_prompts/open-prompts/modifiers/art/art movements.txt") as f:
         art_movements = f.read().split("\n")
 
     artists_and_movements = np.concatenate((artists, art_movements))
-    with open("data/categories/art_mediums.txt") as f:
+    with open("data_prompts/categories/art_mediums.txt") as f:
         art_mediums = f.read().split("\n")
     model = SentenceTransformer("all-mpnet-base-v2")
 
@@ -220,10 +217,10 @@ if __name__ == "__tmain__":
     artists_and_movements_embeddings = model.encode(artists_and_movements)
     descriptive_words_embeddings = model.encode(descriptive_words)
 
-    np.save("data/numpy/subject_embeddings.npy", subject_embeddings)
-    np.save("data/numpy/art_mediums_embeddings.npy", art_mediums_embeddings)
-    np.save("data/numpy/artists_embeddings.npy", artists_and_movements)
-    np.save("data/numpy/modifiers_embeddings.npy", descriptive_words_embeddings)
+    np.save("data_prompts/numpy/subject_embeddings.npy", subject_embeddings)
+    np.save("data_prompts/numpy/art_mediums_embeddings.npy", art_mediums_embeddings)
+    np.save("data_prompts/numpy/artists_embeddings.npy", artists_and_movements)
+    np.save("data_prompts/numpy/modifiers_embeddings.npy", descriptive_words_embeddings)
 
     cur_val = len(subject_embeddings)
 
@@ -258,7 +255,7 @@ if __name__ == "__tmain__":
     ]
 
     np.save(
-        "data/numpy/all_embeddings.npy",
+        "data_prompts/numpy/all_embeddings.npy",
         np.concatenate(
             (
                 subject_embeddings,
@@ -271,7 +268,7 @@ if __name__ == "__tmain__":
     plaintext_words = np.concatenate(
         (subjects, art_mediums, artists_and_movements, descriptive_words)
     )
-    np.save("data/numpy/plaintext_words.npy", plaintext_words)
+    np.save("data_prompts/numpy/plaintext_words.npy", plaintext_words)
     file_name = "categories.json"
     with open(file_name, "w") as file:
         json.dump(category_indices, file, indent=4)
