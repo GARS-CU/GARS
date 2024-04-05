@@ -1,117 +1,217 @@
 from transformers import BertModel, BertTokenizer
+
 from sklearn.neighbors import BallTree
-# Load the tokenizer and model
+
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from sklearn.neighbors import KNeighborsClassifier
 import numpy as np
 from numpy import linalg as LA
 import logging
-import json 
+from sklearn.neighbors import KNeighborsClassifier
+import json
+
+
 class ArtRecSystem:
     """Art Recommendation System using Bag of Words Approach"""
 
-    def __init__(self, decay_rate=0.6, sample_size=10, sample_stage_size=5):
-        # loading bert
-       # self.__tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        #self.__model = BertModel.from_pretrained("bert-base-uncased")
-
+    def __init__(
+        self,
+        metric,
+        decay_rate=0.6,
+        sample_size=10,
+        sample_stage_size=5,
+    ):
+        """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
         self._sample_size = sample_size
         self._user_sample_stage_size = sample_stage_size
         self._matrices = np.zeros((40, 6, 768))
         self._user_matrix = np.zeros((6, 768))
+        self._cur_embeddings = np.zeros((6, 768))  # currently recommended words
         self._plaintext_words = np.load("data/numpy/plaintext_words.npy")
         self._all_embeddings = np.load("data/numpy/all_embeddings.npy")
+        self._metric = metric
+        self._iteration = 0
+        self_cur_embeddings = np.zeros(
+            (6, 768)
+        )  # current embeddings of words that were recommended
 
-        with open('categories.json', 'r') as file:
-            self._category_indexes = json.load(file)
+        if metric == "cosine":
+            self.scoring = self.moving_cosine_dist
+        else:
+            self.scoring = self.moving_euclidean
 
-            #ball tree for finding most similar items   
-        self._subject_ball_tree = BallTree(self._all_embeddings[0:self._category_indexes["mediums"][0]])
-        self._mediums_ball_tree = BallTree(self._all_embeddings[self._category_indexes["mediums"][0]:self._category_indexes["artists"][0]])
-        self._artists_and_movements_ball_tree =BallTree(self._all_embeddings[self._category_indexes["artists"][0]:self._category_indexes["descriptive terms"][0]])
-        self._modifiers_ball_tree = BallTree(self._all_embeddings[self._category_indexes["descriptive terms"][0]:])
-        self._decay_rate = 0.6
+        with open("categories.json", "r") as file:
+            self._category_indices = json.load(file)
 
+        self.knn_subjects = KNeighborsClassifier(n_neighbors=5, metric=metric)
+        self.knn_subjects.fit(
+            self._all_embeddings[0 : self._category_indices["mediums"][0]],
+            range(0, self._category_indices["mediums"][0]),
+        )  # currently recommended words
 
-#    def get_embed(self, text):
-   #     encoded_input = self._tokenizer(text, return_tensors="pt")
-     #   with torch.no_grad():
-     #       output = self._model(**encoded_input)
-       # return output.last_hidden_state.squeeze()
+        self.knn_mediums = KNeighborsClassifier(n_neighbors=5, metric=metric)
+        self.knn_mediums.fit(
+            self._all_embeddings[
+                self._category_indices["mediums"][0] : self._category_indices[
+                    "artists"
+                ][0]
+            ],
+            range(
+                self._category_indices["mediums"][0],
+                self._category_indices["artists"][0],
+            ),
+        )
 
-    def find_closest(self):
-        rec_matr = np.zeros((len(self._user_matrix), 768))
+        self.knn_artists_and_movements = KNeighborsClassifier(
+            n_neighbors=5, metric=metric
+        )
+        self.knn_artists_and_movements.fit(
+            self._all_embeddings[
+                self._category_indices["artists"][0] : self._category_indices[
+                    "descriptive terms"
+                ][0]
+            ],
+            range(
+                self._category_indices["artists"][0],
+                self._category_indices["descriptive terms"][0],
+            ),
+        )
 
-        closest_subject = np.array(self._subject_ball_tree.query([self._user_matrix[0]], k = 1))[1].astype(int)
+        self.knn_modifiers = KNeighborsClassifier(n_neighbors=5, metric=metric)
+        self.knn_modifiers.fit(
+            self._all_embeddings[self._category_indices["descriptive terms"][0] :],
+            range(
+                self._category_indices["descriptive terms"][0],
+                self._category_indices["descriptive terms"][1] + 1,
+            ),
+        )
 
+    # cc    breakpoint()
+    # potentially adjust decay rate
 
-        closest_medium = self._category_indexes["mediums"][0] + np.array(self._mediums_ball_tree.query([self._user_matrix[2]], k = 1))[1].astype(int)
-        
-        #offset of five because first five are subjects
-        closest_artist_and_movement = self._category_indexes["artists"][0] + np.array(self._artists_and_movements_ball_tree.query([self._user_matrix[1]], k = 1))[1].astype(int)
+    def find_closest(self, rating):
+        """finds the closest embedding vector for a specific user vector
+        there is no sampling implemented yet"""
+        # rec_matr = np.zeros((len(self._user_matrix), 768))
+        # last sample stage recomendation
+        self.scoring(rating, self._cur_embeddings)
+        if self._iteration != self._user_sample_stage_size:
+            self._user_matrix *= self._decay_rate
 
+        closest_subject = self.knn_subjects.kneighbors([self._user_matrix[0]])[1]
+        closest_artist_and_movement = self.knn_artists_and_movements.kneighbors(
+            [self._user_matrix[1]]
+        )[1]
+        closest_medium = self.knn_mediums.kneighbors([self._user_matrix[2]])[1]
+        closest_modifiers = self.knn_modifiers.kneighbors(self._user_matrix[3:])[1]
 
-        
+        indices = np.concatenate(
+            (
+                closest_subject,
+                closest_artist_and_movement,
+                closest_medium,
+                closest_modifiers,
+            )
+        ).squeeze()
+        # breakpoint()
+        self._cur_embeddings = self._all_embeddings[indices]
 
-        closest_modifiers = self._category_indexes["descriptive terms"][0] + np.array(self._modifiers_ball_tree.query(self._user_matrix[3:], k = 1))[1].astype(int)
+        return self._plaintext_words[indices]
 
-     
+    def moving_euclidean(self, rating, embeddings):
+        self._user_matrix = (embeddings - self._user_matrix) * float(rating)
 
-        indices = np.concatenate((closest_subject, closest_artist_and_movement, closest_medium, closest_modifiers)).squeeze()
+    def moving_cosine_dist(self, rating, embeddings):
+        self._user_matrix += float(rating) * embeddings
 
-        return self._all_embeddings[indices], self._plaintext_words[indices]
-        
-                                 
+    def __call__(self, rating=None) -> str:
+        """function to get recommendation given a rating"""
 
-    def __call__(self):
+        # sampling stage
+        if self._iteration < self._user_sample_stage_size:
+            self._iteration += 1
+            return self.sampling_stage(rating)
 
-        embeddings, words = self._find_closest()
+        return self.find_closest(rating)
 
+        return None
+        embeddings, words = self.find_closest()
 
         print(f"here are chosen words {words}")
         rating = input("rate from -1 to 1:")
         self._user_matrix += float(rating) * embeddings
         self._user_matrix *= self._decay_rate
 
-        
+    def sampling_stage(self, rating):
+        # cold starting rec system
+        self.scoring(rating, self._cur_embeddings)
+
+        modifiers = np.random.choice(
+            range(
+                self._category_indices["descriptive terms"][0],
+                self._category_indices["descriptive terms"][1] + 1,
+            ),
+            size=3,
+        )
+        subject = np.random.choice(
+            range(0, self._category_indices["mediums"][0]), size=1
+        )
+        artists_and_movements = np.random.choice(
+            range(
+                self._category_indices["artists"][0],
+                self._category_indices["descriptive terms"][0],
+            ),
+            size=1,
+        )
+        mediums = np.random.choice(
+            range(
+                self._category_indices["mediums"][0],
+                self._category_indices["artists"][0],
+            ),
+            size=1,
+        )
+        indices = np.concatenate((subject, artists_and_movements, mediums, modifiers))
+
+        self._cur_embeddings = self._all_embeddings[indices]
+
+        return self._plaintext_words[indices]
+
+        # rating = input("rate from -1 to 1: ")
+        # self._user_matrix += float(rating) * self._all_embeddings[indices]
 
 
+def test_system():
+    rec = ArtRecSystem(metric="cosine")
+    while 1:
+        rating = input("get rating:")
+
+        # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
+        rec_words = rec(rating)
+        print(
+            f"prompt {rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
+        )
 
 
-
-    
-
-    def sampling_stage(self):
-    #cold starting rec system
-
-        for i in range(self._user_sample_stage_size):
-
-            modifiers = np.random.choice(range(79, 484), size = 3)
-            subject = np.random.choice(range(0, 5), size = 1)
-            artists_and_movements = np.random.choice(range(28, 143), size = 1)
-            mediums = np.random.choice(range(6, 28), size = 1)
-            indices = np.concatenate((subject, artists_and_movements, mediums, modifiers))
-            print(self._plaintext_words[indices])
-            rating = input("rate from -1 to 1: ")
-            self._user_matrix += float(rating) * self._all_embeddings[indices]
-z = ArtRecSystem()
+test_system()
 
 
-if __name__ == "__test__":
+# change to main to get embeddings if they are not there
+if __name__ == "__tmain__":
     from sentence_transformers import SentenceTransformer
-     ## [DESCRIPTIVE TERM] OF [SUBJECT] [?Location] [MEDIUM] [MODIFIERS] [2] [3]
-    
-    with open('./data/categories/artists.txt') as f:
-        artists = f.read().split("\n")
-   
 
-    #getting descriptive words 
-    with open('data/categories/subjects.txt') as f:
+    ## [DESCRIPTIVE TERM] OF [SUBJECT] [?Location] [MEDIUM] [MODIFIERS] [2] [3]
+
+    with open("./data/categories/artists.txt") as f:
+        artists = f.read().split("\n")
+
+    # getting descriptive words
+    with open("data/categories/subjects.txt") as f:
         subjects = f.read().split("\n")
 
     with open("data/open-prompts/modifiers/art/descriptive terms.txt", "r") as f:
         descriptive_words = f.read().split("\n")
-    #from #https://www.smore.com/n/st133-art-vocabulary-adjectives
+    # from #https://www.smore.com/n/st133-art-vocabulary-adjectives
     with open("data/categories/descriptive_words_more.txt") as f:
         descriptive_words.extend(f.read().split("\n"))
 
@@ -131,37 +231,58 @@ if __name__ == "__test__":
     np.save("data/numpy/subject_embeddings.npy", subject_embeddings)
     np.save("data/numpy/art_mediums_embeddings.npy", art_mediums_embeddings)
     np.save("data/numpy/artists_embeddings.npy", artists_and_movements)
-    np.save("data/numpy/modifiers_embeddings.npy",descriptive_words_embeddings)
+    np.save("data/numpy/modifiers_embeddings.npy", descriptive_words_embeddings)
 
-    cur_val = len(subject_embeddings) 
-    
-    #create a dictionary of proper indexes of each category
-    category_indexes = {}
-    
+    cur_val = len(subject_embeddings)
+
+    # create a dictionary of proper indices of each category
+    category_indices = {}
+
     print(f"subjects 0 - {len(subject_embeddings) - 1}")
-    category_indexes["subjects"] = [0, len(subject_embeddings) - 1]
+    category_indices["subjects"] = [0, len(subject_embeddings) - 1]
 
-    print(f"mediums {cur_val} - {cur_val + len(art_mediums_embeddings) - 1}" ) #mediums
-    category_indexes["mediums"] = [cur_val,len(subject_embeddings) + len(art_mediums_embeddings) - 1]
-    
+    print(f"mediums {cur_val} - {cur_val + len(art_mediums_embeddings) - 1}")  # mediums
+    category_indices["mediums"] = [
+        cur_val,
+        len(subject_embeddings) + len(art_mediums_embeddings) - 1,
+    ]
+
     cur_val += len(art_mediums_embeddings)
-    print(f"artists {cur_val} - {cur_val +len(artists_and_movements_embeddings)  - 1}")  #artists
-    category_indexes["artists"] = [cur_val, cur_val + len(artists_and_movements_embeddings) - 1]
+    print(
+        f"artists {cur_val} - {cur_val +len(artists_and_movements_embeddings)  - 1}"
+    )  # artists
+    category_indices["artists"] = [
+        cur_val,
+        cur_val + len(artists_and_movements_embeddings) - 1,
+    ]
 
     cur_val += len(artists_and_movements_embeddings)
-    print(f"descriptive term {cur_val} - {cur_val +  len(descriptive_words_embeddings) - 1}") #descriptive terms
-    category_indexes["descriptive terms"] = [cur_val, cur_val + len(descriptive_words_embeddings) + 1]
+    print(
+        f"descriptive term {cur_val} - {cur_val +  len(descriptive_words_embeddings) - 1}"
+    )  # descriptive terms
+    category_indices["descriptive terms"] = [
+        cur_val,
+        cur_val + len(descriptive_words_embeddings) - 1,
+    ]
 
-
-    np.save("data/numpy/all_embeddings.npy", np.concatenate((subject_embeddings,  art_mediums_embeddings,  artists_and_movements_embeddings, descriptive_words_embeddings)))
-    plaintext_words = np.concatenate((subjects, art_mediums, artists_and_movements, descriptive_words))
+    np.save(
+        "data/numpy/all_embeddings.npy",
+        np.concatenate(
+            (
+                subject_embeddings,
+                art_mediums_embeddings,
+                artists_and_movements_embeddings,
+                descriptive_words_embeddings,
+            )
+        ),
+    )
+    plaintext_words = np.concatenate(
+        (subjects, art_mediums, artists_and_movements, descriptive_words)
+    )
     np.save("data/numpy/plaintext_words.npy", plaintext_words)
-
     file_name = "categories.json"
-    with open(file_name, 'w') as file:
-        json.dump(category_indexes, file, indent=4)
-
-    
+    with open(file_name, "w") as file:
+        json.dump(category_indices, file, indent=4)
 
 
 """def cosine_sim(a, b):
