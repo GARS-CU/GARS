@@ -1,14 +1,8 @@
 from transformers import BertModel, BertTokenizer
-
-from sklearn.neighbors import BallTree
-
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from sklearn.neighbors import KNeighborsClassifier
 import numpy as np
 from numpy import linalg as LA
 import logging
-from sklearn.neighbors import KNeighborsClassifier
 import json
 
 
@@ -37,7 +31,6 @@ class ArtRecSystem:
         self_cur_embeddings = np.zeros(
             (6, 768)
         )  # current embeddings of words that were recommended
-
         if metric == "cosine":
             self.scoring = self.moving_cosine_dist
         else:
@@ -52,6 +45,7 @@ class ArtRecSystem:
             range(0, self._category_indices["mediums"][0]),
         )  # currently recommended words
 
+import torch
         self.knn_mediums = KNeighborsClassifier(n_neighbors=5, metric=metric)
         self.knn_mediums.fit(
             self._all_embeddings[
@@ -227,6 +221,7 @@ if __name__ == "__main__":
     art_mediums_embeddings = model.encode(art_mediums)
     artists_and_movements_embeddings = model.encode(artists_and_movements)
     descriptive_words_embeddings = model.encode(descriptive_words)
+import torch
 
     np.save("data_prompts/numpy/subject_embeddings.npy", subject_embeddings)
     np.save("data_prompts/numpy/art_mediums_embeddings.npy", art_mediums_embeddings)
