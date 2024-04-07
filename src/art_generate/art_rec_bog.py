@@ -1,7 +1,7 @@
-from transformers import BertModel, BertTokenizer
 from sklearn.neighbors import KNeighborsClassifier
 import numpy as np
-from numpy import linalg as LA
+from diffusers import AutoPipelineForText2Image
+import torch
 import logging
 import json
 
@@ -16,6 +16,7 @@ class ArtRecSystem:
         sample_size=10,
         sample_stage_size=5,
         max_jump=1 / 3,
+        art_generate=False,  # determines whether art will be outputted
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
         self._sample_size = sample_size
@@ -39,13 +40,22 @@ class ArtRecSystem:
         with open("categories.json", "r") as file:
             self._category_indices = json.load(file)
 
+        if art_generate:
+            # for now and testing sdxl-turbo, for actual one bytedance model, stable cascade still not working
+            self.sdxl_turbo = AutoPipelineForText2Image.from_pretrained(
+                "stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16"
+            )
+            sel.sdxl_turbo.to("cuda")
+            self.art_generate = True
+        else:
+            self.art_generate = False
+
         self.knn_subjects = KNeighborsClassifier(n_neighbors=5, metric=metric)
         self.knn_subjects.fit(
             self._all_embeddings[0 : self._category_indices["mediums"][0]],
             range(0, self._category_indices["mediums"][0]),
         )  # currently recommended words
 
-import torch
         self.knn_mediums = KNeighborsClassifier(n_neighbors=5, metric=metric)
         self.knn_mediums.fit(
             self._all_embeddings[
@@ -116,6 +126,18 @@ import torch
 
         return self._plaintext_words[indices]
 
+    def generate_image(self, prompt):
+        """generates an image given a prompt"""
+
+        if self.art_generate:
+            image = self.sdxl_turbo(
+                prompt=prompt, num_inference_steps=1, guidance_scale=0.0
+            ).images[0]
+        else:
+            image = -1
+
+        return image
+
     def max_jump(self):
         """Can be used to make more dynamic jumping"""
         return self._max_jump
@@ -128,15 +150,25 @@ import torch
     def moving_cosine_dist(self, rating, embeddings):
         self._user_matrix += float(rating) * embeddings
 
-    def __call__(self, rating=0) -> str:
+    def __call__(self, rating=0):
         """function to get recommendation given a rating"""
 
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
             self._iteration += 1
-            return self.sampling_stage(rating)
+            rec_words = self.sampling_stage(rating)
+            rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
 
-        return self.find_closest(rating)
+            return (
+                self.generate_image(rec_prompt),
+                rec_prompt,
+                rec_words,
+            )
+        self._iteration += 1
+        rec_words = self.find_closest(rating)
+        rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
+
+        return self.generate_image(rec_prompt), rec_prompt, rec_words
 
     def sampling_stage(self, rating):
         # cold starting rec system
@@ -182,14 +214,13 @@ def test_system():
         rating = input("get rating:")
 
         # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
-        rec_words = rec(rating)
-        print(
-            f"prompt {rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
-        )
+        rec_img, rec_prompt, rec_image = rec(rating)
+        print(rec_prompt)
 
 
+test_system()
 # change to main to get embeddings if they are not there
-if __name__ == "__main__":
+if __name__ == "__tmain__":
     from sentence_transformers import SentenceTransformer
 
     ## [DESCRIPTIVE TERM] OF [SUBJECT] [?Location] [MEDIUM] [MODIFIERS] [2] [3]
@@ -221,7 +252,6 @@ if __name__ == "__main__":
     art_mediums_embeddings = model.encode(art_mediums)
     artists_and_movements_embeddings = model.encode(artists_and_movements)
     descriptive_words_embeddings = model.encode(descriptive_words)
-import torch
 
     np.save("data_prompts/numpy/subject_embeddings.npy", subject_embeddings)
     np.save("data_prompts/numpy/art_mediums_embeddings.npy", art_mediums_embeddings)
@@ -278,33 +308,3 @@ import torch
     file_name = "categories.json"
     with open(file_name, "w") as file:
         json.dump(category_indices, file, indent=4)
-
-
-"""def cosine_sim(a, b):
-    return np.dot(a, b) / (LA.norm(a) * LA.norm(b))
-
-
-text = "artifical intelligence"
-text2 = "human intelligence"
-rec_model = ArtRecSystem()
-embeddings_p = rec_model.get_embed(text)
-embeddings_p2 = rec_model.get_embed(text2)
-# The last hidden state is the sequence of hidden states of the last layer of the model.
-# Obtaining the embeddings for each token in the sentence
-
-embeddings = np.load("embeddings.npy", mmap_mode="r")
-avg1 = embeddings_p.mean(axis=0)
-avg2 = embeddings_p2.mean(axis=0)
-breakpoint()
-z = torch.cosine_similarity(avg1.reshape(1, -1), avg2.reshape(1, -1))
-x = cosine_sim(avg1, avg2)
-from transformers import pipeline
-
-text_pipe = pipeline("text-generation", model="LykosAI/GPT-Prompt-Expansion-Fooocus-v2")
-
-prompt = "ocean in style of van gogh"
-extended_prompt = text_pipe(prompt)
-print(extended_prompt)
-
-
-"""
