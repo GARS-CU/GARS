@@ -45,7 +45,7 @@ class ArtRecSystem:
             self.sdxl_turbo = AutoPipelineForText2Image.from_pretrained(
                 "stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16"
             )
-            sel.sdxl_turbo.to("cuda")
+            self.sdxl_turbo.to("cuda")
             self.art_generate = True
         else:
             self.art_generate = False
