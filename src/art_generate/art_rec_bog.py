@@ -47,7 +47,7 @@ class ArtRecSystem:
         else:
             self.scoring = self.moving_euclidean
 
-        with open("categories.json", "r") as file:
+        with open(f"{gars_art_path}/categories.json", "r") as file:
             self._category_indices = json.load(file)
 
         if art_generate:
@@ -224,7 +224,7 @@ def test_system():
         rating = input("get rating:")
 
         # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
-        rec_img, rec_prompt, rec_image = rec(rating)
+        rec_img, rec_prompt, rec_words = rec(rating)
         print(rec_prompt)
 
 
@@ -334,6 +334,6 @@ if __name__ == "__tmain__":
         (subjects, art_mediums, artists_and_movements, descriptive_words)
     )
     np.save(f"{gars_art_path}/data_prompts/numpy/plaintext_words.npy", plaintext_words)
-    file_name = "categories.json"
+    file_name = f"{gars_art_path}/categories.json"
     with open(file_name, "w") as file:
         json.dump(category_indices, file, indent=4)
