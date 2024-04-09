@@ -24,7 +24,7 @@ class ArtRecSystem:
 
         gars_path = os.environ["GARS_PROJ"]
         gars_art_path = os.path.join(gars_path, "art_generate")
-        self._decay_rate = decay_rate
+
         self._sample_size = sample_size
         self._user_sample_stage_size = sample_stage_size
         self._matrices = np.zeros((40, 6, 768))
@@ -228,7 +228,7 @@ def test_system():
         print(rec_prompt)
 
 
-test_system()
+# test_system()
 # change to main to get embeddings if they are not there
 if __name__ == "__tmain__":
     from sentence_transformers import SentenceTransformer
