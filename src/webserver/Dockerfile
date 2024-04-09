@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y libgl1-mesa-glx
 RUN pip install --no-cache-dir numpy tensorflow keras scikit-learn matplotlib opencv-python-headless flask Pillow
 
 # # Expose port 5000 for the Flask app
-# EXPOSE 5000
+EXPOSE 8000
 
 # Your application's entry point
-CMD ["python", "engagement_preprocess.py"]
+CMD ["python", "app.py"]

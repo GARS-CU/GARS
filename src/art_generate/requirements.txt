@@ -1,9 +1,4 @@
-nltk==3.8.1
-openai==1.16.2
-pandas==1.5.3
-scikit_learn==1.4.1.post1
-sentence_transformers==2.2.2
-tensorflow==2.16.1
-tensorflow==2.15.0
-tensorflow_hub==0.16.1
-tensorflow_text==2.16.1
+scikit_learn==0.24.1
+sentence_transformers==2.6.1
+torch==2.2.2
+transformers==4.39.3

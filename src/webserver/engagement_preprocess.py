@@ -3,18 +3,43 @@ import numpy as np
 import contextlib
 import sys
 import os
+import pickle
+from PIL import Image
+from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'Classes'))
 from Daisee_Regressor_Final import EngagementClassifierInference
 # from deepface import DeepFace
+sys.path.append(os.environ['GARS_PROJ'])  #append path for util 
+sys.path.append(os.path.join(os.environ['GARS_PROJ'], 'art_generate')) #append path for rec system 
+from util import *
+from art_rec_bog import ArtRecSystem
 
 class Engagement:
     def __init__(self):
         # Initialize the Haar Cascade Classifier
         haar_path =  os.path.join("Models", "haarcascade_frontalface_alt.xml")
         self.face_cascade = cv2.CascadeClassifier(haar_path)
+        self.rec = ArtRecSystem(metric='cosine', art_generate=True)
     
-    def extract_open_features(self, open_csv):
-        data = np.loadtxt(open_csv, delimiter=",", skiprows=1)
+    def generate_art(self, engagement_score):
+        image, prompt, words = self.rec(rating=engagement_score)
+
+        # Save gen image
+        generated_images_dir = 'Generated_Images'
+        os.makedirs(generated_images_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_path = os.path.join(generated_images_dir, f"generated_art_{timestamp}.png")
+        
+        image.save(image_path)
+        print(prompt)
+        print(words)
+
+        return image_path
+        
+    def extract_open_features(self, filename):
+        open_csv_dir = os.path.join("/app/openface_dump/processed", f"{os.path.splitext(filename)[0]}.csv")
+        data = np.loadtxt(open_csv_dir, delimiter=",", skiprows=1)
         
         # Ensure only the first 300 frames are considered
         if data.shape[0] > 300:
@@ -73,27 +98,27 @@ class Engagement:
         
         return frames_array
     
-def main():
-    engagement = Engagement()
+# def main():
+#     engagement = Engagement()
     
-    video_file = 'uploaded_video.mp4'
-    csv_file = 'uploaded_video.csv'
+#     video_file = 'uploaded_video.mp4'
+#     csv_file = 'uploaded_video.csv'
     
-    open_features = engagement.extract_open_features(csv_file)
-    print("Open Features Shape:", open_features.shape)
-    # print(open_features)
+#     open_features = engagement.extract_open_features(csv_file)
+#     print("Open Features Shape:", open_features.shape)
+#     # print(open_features)
     
-    emotion_features = engagement.extract_emotion_features(video_file)
-    print("Emotion Features Shape:", emotion_features.shape)
-    # print(emotion_features)
+#     emotion_features = engagement.extract_emotion_features(video_file)
+#     print("Emotion Features Shape:", emotion_features.shape)
+#     # print(emotion_features)
 
-    classifier = EngagementClassifierInference()
+#     classifier = EngagementClassifierInference()
 
-    open_features_pca = classifier.get_open_inference(open_features)
-    print("Open Features PCA Shape:", open_features.shape)
+#     open_features_pca = classifier.get_open_inference(open_features)
+#     print("Open Features PCA Shape:", open_features.shape)
 
-    engagement_score = classifier.predict_engagement(emotion_features, open_features_pca)
-    print(engagement_score)
+#     engagement_score = classifier.predict_engagement(emotion_features, open_features_pca)
+#     print(engagement_score)
 
 if __name__ == "__main__":
     main()

@@ -24,7 +24,7 @@ def process():
     with open(video_path, 'wb') as vid_file:
         vid_file.write(video_data)
 
-    url = 'http://199.98.27.216:5000/process_data'
+    url = 'http://199.98.27.237:8000/process_data'
     files = {'file': ('video.mp4', video_data, 'video/mp4')}
     response = requests.post(url, files=files)
 

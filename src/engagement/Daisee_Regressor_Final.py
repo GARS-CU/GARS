@@ -41,6 +41,7 @@ def get_open():
 
     return train_open, val_open
 
+
 def assemble():
 
     train_emotion = np.load(os.path.join(path, "Train", "emotion_all_frames_features.npy"))
@@ -187,7 +188,8 @@ class Engagement_Classifier:
 
 # Class just for inference - loads in weights and uses model to predict
 class EngagementClassifierInference:
-    def __init__(self, weights_path):
+    # Build model and load weights
+    def __init__(self):
         inp_emo = keras.Input((10, 48, 48, 1))
         inp_open = keras.Input((300, 300, 1))
 
@@ -203,12 +205,31 @@ class EngagementClassifierInference:
         weights_path = os.path.join(var.GARS_PROJ, "Models", "Integrated_Model", "Engagement_Model_weights.h5")
         self.model.load_weights(weights_path)
 
+    # Pred function
     def predict_engagement(self, emotion_features, openface_features):
         emotion_features = np.expand_dims(emotion_features, axis=0)
         openface_features = np.expand_dims(openface_features, axis=0)
         
         engagement_score = self.model.predict([emotion_features, openface_features])
         return engagement_score
+    
+    # Applying PCA
+    def get_open_inference(open_features):
+        # Get saved scaler and pca file paths
+        scaler_path = os.path.join(var.GARS_PROJ, "Models", "Integrated_Model", "scaler.pkl")
+        pca_path = os.path.join(var.GARS_PROJ, "Models", "Integrated_Model", "pca.pkl")
+
+        # Load the scaler and PCA models
+        with open(scaler_path, 'rb') as f:
+            scaler = pk.load(f)
+        with open(pca_path, 'rb') as f:
+            pca = pk.load(f)
+        
+        # Normalize the feature set and apply pca
+        open_features_normalized = scaler.transform(open_features)
+        open_features_pca = pca.transform(open_features_normalized)
+
+        return open_features_pca
 
 
 # x_train, y_train, x_val, y_val = build_dataset()
