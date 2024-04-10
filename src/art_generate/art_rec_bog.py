@@ -1,4 +1,4 @@
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import NearestNeighbors
 import numpy as np
 from diffusers import AutoPipelineForText2Image
 import torch
@@ -17,7 +17,7 @@ class ArtRecSystem:
         decay_rate=0.6,
         sample_size=10,
         sample_stage_size=5,
-        max_jump=1 / 3,
+        max_jump=1 / 1000,
         art_generate=False,  # determines whether art will be outputted
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
@@ -26,6 +26,7 @@ class ArtRecSystem:
         gars_art_path = os.path.join(gars_path, "art_generate")
 
         self._sample_size = sample_size
+        self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
         self._matrices = np.zeros((40, 6, 768))
         self._user_matrix = np.zeros((6, 768))
@@ -60,47 +61,33 @@ class ArtRecSystem:
         else:
             self.art_generate = False
 
-        self.knn_subjects = KNeighborsClassifier(n_neighbors=5, metric=metric)
-        self.knn_subjects.fit(
+        self._nn_subjects = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._nn_subjects.fit(
             self._all_embeddings[0 : self._category_indices["mediums"][0]],
             range(0, self._category_indices["mediums"][0]),
         )  # currently recommended words
 
-        self.knn_mediums = KNeighborsClassifier(n_neighbors=5, metric=metric)
-        self.knn_mediums.fit(
+        self._nn_mediums = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._nn_mediums.fit(
             self._all_embeddings[
                 self._category_indices["mediums"][0] : self._category_indices[
                     "artists"
                 ][0]
-            ],
-            range(
-                self._category_indices["mediums"][0],
-                self._category_indices["artists"][0],
-            ),
+            ]
         )
 
-        self.knn_artists_and_movements = KNeighborsClassifier(
-            n_neighbors=5, metric=metric
-        )
-        self.knn_artists_and_movements.fit(
+        self._nn_artists_and_movements = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._nn_artists_and_movements.fit(
             self._all_embeddings[
                 self._category_indices["artists"][0] : self._category_indices[
                     "descriptive terms"
                 ][0]
-            ],
-            range(
-                self._category_indices["artists"][0],
-                self._category_indices["descriptive terms"][0],
-            ),
+            ]
         )
 
-        self.knn_modifiers = KNeighborsClassifier(n_neighbors=5, metric=metric)
-        self.knn_modifiers.fit(
-            self._all_embeddings[self._category_indices["descriptive terms"][0] :],
-            range(
-                self._category_indices["descriptive terms"][0],
-                self._category_indices["descriptive terms"][1] + 1,
-            ),
+        self._nn_modifiers = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._nn_modifiers.fit(
+            self._all_embeddings[self._category_indices["descriptive terms"][0] :]
         )
 
     # cc    breakpoint()
@@ -113,12 +100,19 @@ class ArtRecSystem:
         # last sample stage recomendation
         self.scoring(rating, self._cur_embeddings)
 
-        closest_subject = self.knn_subjects.kneighbors([self._user_matrix[0]])[1]
-        closest_artist_and_movement = self.knn_artists_and_movements.kneighbors(
-            [self._user_matrix[1]]
-        )[1]
-        closest_medium = self.knn_mediums.kneighbors([self._user_matrix[2]])[1]
-        closest_modifiers = self.knn_modifiers.kneighbors(self._user_matrix[3:])[1]
+        closest_subject = self._nn_subjects.kneighbors([self._user_matrix[0]])[1][:, 0]
+        closest_artist_and_movement = (
+            self._nn_artists_and_movements.kneighbors([self._user_matrix[1]])[1][:, 0]
+            + self._category_indices["artists"][0]
+        )
+        closest_medium = (
+            self._nn_mediums.kneighbors([self._user_matrix[2]])[1][:, 0]
+            + self._category_indices["mediums"][0]
+        )
+        closest_modifiers = (
+            self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:, 0]
+            + self._category_indices["descriptive terms"][0]
+        )
 
         indices = np.concatenate(
             (
@@ -228,9 +222,8 @@ def test_system():
         print(rec_prompt)
 
 
-# test_system()
 # change to main to get embeddings if they are not there
-if __name__ == "__tmain__":
+if __name__ == "__main__":
     from sentence_transformers import SentenceTransformer
 
     gars_path = os.environ["GARS_PROJ"]
@@ -337,3 +330,4 @@ if __name__ == "__tmain__":
     file_name = f"{gars_art_path}/categories.json"
     with open(file_name, "w") as file:
         json.dump(category_indices, file, indent=4)
+test_system()
