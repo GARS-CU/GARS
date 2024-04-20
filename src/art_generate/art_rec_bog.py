@@ -34,19 +34,20 @@ class ArtRecSystem:
         sample_size=10,
         sample_stage_size=5,
         max_jump=1 / 1000,
-        total_iterations=40,
+        total_iterations=20,
         art_generate=False,  # determines whether art will be outputted
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
-
+        logging.basicConfig(level=logging.DEBUG)
         gars_path = os.environ["GARS_PROJ"]
         gars_art_path = os.path.join(gars_path, "art_generate")
         self._sample_size = sample_size
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
-        self._matrices = np.zeros((40, 6, 768))
+        self._matrices = np.zeros((total_iterations, 6, 768))
         self._user_matrix = np.zeros((6, 768))
         self._cur_embeddings = np.zeros((6, 768))  # currently recommended words
+
         self._plaintext_words = np.load(
             f"{gars_art_path}/data_prompts/numpy/plaintext_words.npy"
         )
@@ -127,6 +128,7 @@ class ArtRecSystem:
             - self._category_indices["descriptive terms"][0]
             + 1
         )
+
         self._nn_modifiers = NearestNeighbors(
             n_neighbors=self._total_modifiers, metric=metric
         )
@@ -136,9 +138,11 @@ class ArtRecSystem:
 
     # cc    breakpoint()
     # potentially adjust decay rate
-    def get_val_rand_k(self, total):
+    def get_val_rand_k(self, total, size=None):
         """gets random top k value lowering k as iterations increase"""
-        return np.random.randint(total + 1)
+        k = self.exp_decay(total)
+        logging.debug(f"k = {k}")
+        return np.random.randint(k, size=size)
 
     def find_closest(self, rating):
         """finds the closest embedding vector for a specific user vector
@@ -147,19 +151,25 @@ class ArtRecSystem:
         # last sample stage recomendation
         self.scoring(rating, self._cur_embeddings)
 
-        closest_subject = self._nn_subjects.kneighbors([self._user_matrix[0]])[1][:, 0]
+        closest_subject = self._nn_subjects.kneighbors([self._user_matrix[0]])[1][
+            :, self.get_val_rand_k(self._total_subjects)
+        ]
         closest_artist_and_movement = (
-            self._nn_artists_and_movements.kneighbors([self._user_matrix[1]])[1][:, 0]
+            self._nn_artists_and_movements.kneighbors([self._user_matrix[1]])[1][
+                :, self.get_val_rand_k(self._total_artists_movements)
+            ]
             + self._category_indices["artists"][0]
         )
         closest_medium = (
-            self._nn_mediums.kneighbors([self._user_matrix[2]])[1][:, 0]
+            self._nn_mediums.kneighbors([self._user_matrix[2]])[1][
+                :, self.get_val_rand_k(self._total_mediums)
+            ]
             + self._category_indices["mediums"][0]
         )
-        closest_modifiers = (
-            self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:, 0]
-            + self._category_indices["descriptive terms"][0]
-        )
+        indices = self._nn_modifiers.kneighbors(self._user_matrix[3:])[1]
+        columns_selected = self.get_val_rand_k(self._total_modifiers, size=3)
+  
+        closest_modifiers = columns_selected + self._category_indices["descriptive terms"][0]
 
         indices = np.concatenate(
             (
@@ -170,8 +180,8 @@ class ArtRecSystem:
             )
         ).squeeze()
         # breakpoint()
-        if self._iteration != self._user_sample_stage_size:
-            self._user_matrix *= self._decay_rate
+
+        self._user_matrix *= self._decay_rate
 
         self._cur_embeddings = self._all_embeddings[indices]
 
@@ -179,8 +189,9 @@ class ArtRecSystem:
 
     def exp_decay(self, total):
         """decay  the amount of nearest neighbors so it approaches 1 after final iteration"""
+        self._non_sample_iter = self._iteration - self._user_sample_stage_size
         r = (1 / total) ** (1 / (self._total_iterations))
-        return math.ceil(total * r ** (self._iteration - 1))
+        return math.ceil(total * r ** (self._non_sample_iter))
 
     def generate_image(self, prompt):
         """generates an image given a prompt"""
@@ -211,18 +222,17 @@ class ArtRecSystem:
 
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
-            self._iteration += 1
             rec_words = self.sampling_stage(rating)
             rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
-
+            self._iteration += 1
             return (
                 self.generate_image(rec_prompt),
                 rec_prompt,
                 rec_words,
             )
-        self._iteration += 1
         rec_words = self.find_closest(rating)
         rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
+        self._iteration += 1
         return self.generate_image(rec_prompt), rec_prompt, rec_words
 
     def sampling_stage(self, rating):
@@ -383,4 +393,3 @@ def test_system():
         print(rec_prompt)
 
 
-# test_system()
