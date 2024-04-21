@@ -3,11 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <title>GARS</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: space-between;
+        }
+        #left-content {
+            flex: 1;
+        }
+        #generated-art-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #generated-art {
+            max-width: 100%;
+            max-height: 100vh;
+            border: 2px solid #000;
+        }
+    </style>
 </head>
 <body>
-    <video id="video" width="640" height="480" autoplay></video>
-    <button id="recordBtn">Record Video</button>
-    <p id="status">Press the button to generate new art.</p>
+    <div id="left-content">
+        <video id="video" width="640" height="480" autoplay></video>
+        <button id="recordBtn">Record Video</button>
+        <p id="status">Press the button to generate new art.</p>
+        <p id="engagement-score">Engagement Score: </p>
+        <p>
+            <input type="number" id="scoreInput" step="0.01" min="-1" max="1" placeholder="Enter engagement score (-1 to 1)">
+            <button id="submitScoreBtn">Submit Score</button>
+        </p>
+    </div>
+    <div id="generated-art-container">
+        <img id="generated-art" src="" alt="Generated Art Will Appear Here">
+    </div>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>

@@ -38,7 +38,15 @@ class Engagement:
         return image_path
         
     def extract_open_features(self, filename):
-        open_csv_dir = os.path.join("/app/openface_dump/processed", f"{os.path.splitext(filename)[0]}.csv")
+        openface_path = "docker exec openface_docker /home/openface-build/build/bin/"
+        video_path = os.path.join("received_videos", filename)
+        output_dir = "processed" 
+
+        # Execute OpenFace FeatureExtraction
+        command = f'{openface_path}FeatureExtraction -f {video_path} -out_dir {output_dir}'
+        os.system(command)
+
+        open_csv_dir = os.path.join('/zooper2/colin.hwang/openface_dump/processed', f"{os.path.splitext(filename)[0]}.csv")
         data = np.loadtxt(open_csv_dir, delimiter=",", skiprows=1)
         
         # Ensure only the first 300 frames are considered
