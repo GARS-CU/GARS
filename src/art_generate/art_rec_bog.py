@@ -6,6 +6,22 @@ import logging
 import json
 import os
 import sys
+import signal
+import math
+
+history = {}
+
+history["rec_prompts"] = []
+history["rec_imgs"] = []
+history["rec_words"] = []
+
+
+def signal_handler(sig, frame):
+    print("saving history")
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
 
 
 class ArtRecSystem:
@@ -18,25 +34,28 @@ class ArtRecSystem:
         sample_size=10,
         sample_stage_size=5,
         max_jump=1 / 1000,
+        total_iterations=20,
         art_generate=False,  # determines whether art will be outputted
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
-
+        logging.basicConfig(level=logging.DEBUG)
         gars_path = os.environ["GARS_PROJ"]
         gars_art_path = os.path.join(gars_path, "art_generate")
-
         self._sample_size = sample_size
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
-        self._matrices = np.zeros((40, 6, 768))
+        self._matrices = np.zeros((total_iterations, 6, 768))
+        self._art_indices = []
         self._user_matrix = np.zeros((6, 768))
         self._cur_embeddings = np.zeros((6, 768))  # currently recommended words
+
         self._plaintext_words = np.load(
             f"{gars_art_path}/data_prompts/numpy/plaintext_words.npy"
         )
         self._all_embeddings = np.load(
             f"{gars_art_path}/data_prompts/numpy/all_embeddings.npy"
         )
+        self._total_iterations = total_iterations
         self._metric = metric
         self._iteration = 0
         self._max_jump = 1 / 3
@@ -61,13 +80,27 @@ class ArtRecSystem:
         else:
             self.art_generate = False
 
-        self._nn_subjects = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._total_subjects = (
+            self._category_indices["subjects"][1]
+            - self._category_indices["subjects"][0]
+            + 1
+        )
+        self._nn_subjects = NearestNeighbors(
+            n_neighbors=self._total_subjects, metric=metric
+        )
         self._nn_subjects.fit(
             self._all_embeddings[0 : self._category_indices["mediums"][0]],
             range(0, self._category_indices["mediums"][0]),
         )  # currently recommended words
 
-        self._nn_mediums = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._total_mediums = (
+            self._category_indices["mediums"][1]
+            - self._category_indices["mediums"][0]
+            + 1
+        )
+        self._nn_mediums = NearestNeighbors(
+            n_neighbors=self._total_mediums, metric=metric
+        )
         self._nn_mediums.fit(
             self._all_embeddings[
                 self._category_indices["mediums"][0] : self._category_indices[
@@ -75,8 +108,14 @@ class ArtRecSystem:
                 ][0]
             ]
         )
-
-        self._nn_artists_and_movements = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._total_artists_movements = (
+            self._category_indices["artists"][1]
+            - self._category_indices["artists"][0]
+            + 1
+        )
+        self._nn_artists_and_movements = NearestNeighbors(
+            n_neighbors=self._total_artists_movements, metric=metric
+        )
         self._nn_artists_and_movements.fit(
             self._all_embeddings[
                 self._category_indices["artists"][0] : self._category_indices[
@@ -85,13 +124,26 @@ class ArtRecSystem:
             ]
         )
 
-        self._nn_modifiers = NearestNeighbors(n_neighbors=5, metric=metric)
+        self._total_modifiers = (
+            self._category_indices["descriptive terms"][1]
+            - self._category_indices["descriptive terms"][0]
+            + 1
+        )
+
+        self._nn_modifiers = NearestNeighbors(
+            n_neighbors=self._total_modifiers, metric=metric
+        )
         self._nn_modifiers.fit(
             self._all_embeddings[self._category_indices["descriptive terms"][0] :]
         )
 
     # cc    breakpoint()
     # potentially adjust decay rate
+    def get_val_rand_k(self, total, size=None):
+        """gets random top k value lowering k as iterations increase"""
+        k = self.exp_decay(total)
+        logging.debug(f"k = {k}")
+        return np.random.randint(k, size=size)
 
     def find_closest(self, rating):
         """finds the closest embedding vector for a specific user vector
@@ -100,19 +152,24 @@ class ArtRecSystem:
         # last sample stage recomendation
         self.scoring(rating, self._cur_embeddings)
 
-        closest_subject = self._nn_subjects.kneighbors([self._user_matrix[0]])[1][:, 0]
+        closest_subject = self._nn_subjects.kneighbors([self._user_matrix[0]])[1][
+            :, self.get_val_rand_k(self._total_subjects)
+        ]
         closest_artist_and_movement = (
-            self._nn_artists_and_movements.kneighbors([self._user_matrix[1]])[1][:, 0]
+            self._nn_artists_and_movements.kneighbors([self._user_matrix[1]])[1][
+                :, self.get_val_rand_k(self._total_artists_movements)
+            ]
             + self._category_indices["artists"][0]
         )
+        self._art_indices.append(int(closest_artist_and_movement[0]) - 28)
         closest_medium = (
-            self._nn_mediums.kneighbors([self._user_matrix[2]])[1][:, 0]
+            self._nn_mediums.kneighbors([self._user_matrix[2]])[1][
+                :, self.get_val_rand_k(self._total_mediums)
+            ]
             + self._category_indices["mediums"][0]
         )
-        closest_modifiers = (
-            self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:, 0]
-            + self._category_indices["descriptive terms"][0]
-        )
+        closest_modifiers = self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:,self.get_val_rand_k(self._total_modifiers, size=3)][0] + self._category_indices["descriptive terms"][0]
+
 
         indices = np.concatenate(
             (
@@ -123,12 +180,18 @@ class ArtRecSystem:
             )
         ).squeeze()
         # breakpoint()
-        if self._iteration != self._user_sample_stage_size:
-            self._user_matrix *= self._decay_rate
+
+        self._user_matrix *= self._decay_rate
 
         self._cur_embeddings = self._all_embeddings[indices]
 
         return self._plaintext_words[indices]
+
+    def exp_decay(self, total):
+        """decay  the amount of nearest neighbors so it approaches 1 after final iteration"""
+        self._non_sample_iter = self._iteration - self._user_sample_stage_size
+        r = (1 / total) ** (1 / (self._total_iterations))
+        return math.ceil(total * r ** (self._non_sample_iter))
 
     def generate_image(self, prompt):
         """generates an image given a prompt"""
@@ -159,19 +222,17 @@ class ArtRecSystem:
 
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
-            self._iteration += 1
             rec_words = self.sampling_stage(rating)
             rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
-
+            self._iteration += 1
             return (
                 self.generate_image(rec_prompt),
                 rec_prompt,
                 rec_words,
             )
-        self._iteration += 1
         rec_words = self.find_closest(rating)
         rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
-
+        self._iteration += 1
         return self.generate_image(rec_prompt), rec_prompt, rec_words
 
     def sampling_stage(self, rating):
@@ -193,8 +254,9 @@ class ArtRecSystem:
                 self._category_indices["artists"][0],
                 self._category_indices["descriptive terms"][0],
             ),
-            size=1,
+            size=1
         )
+        self._art_indices.append(int(artists_and_movements[0]) - 28) 
         mediums = np.random.choice(
             range(
                 self._category_indices["mediums"][0],
@@ -210,17 +272,6 @@ class ArtRecSystem:
 
         # rating = input("rate from -1 to 1: ")
         # self._user_matrix += float(rating) * self._all_embeddings[indices]
-
-
-def test_system():
-    rec = ArtRecSystem(metric="cosine")
-    while 1:
-        rating = input("get rating:")
-
-        # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
-        rec_img, rec_prompt, rec_words = rec(rating)
-        print(rec_prompt)
-
 
 # change to main to get embeddings if they are not there
 if __name__ == "__main__":
@@ -291,7 +342,7 @@ if __name__ == "__main__":
     print(f"mediums {cur_val} - {cur_val + len(art_mediums_embeddings) - 1}")  # mediums
     category_indices["mediums"] = [
         cur_val,
-        len(subject_embeddings) + len(art_mediums_embeddings) - 1,
+        cur_val + len(art_mediums_embeddings) - 1,
     ]
 
     cur_val += len(art_mediums_embeddings)
@@ -330,4 +381,15 @@ if __name__ == "__main__":
     file_name = f"{gars_art_path}/categories.json"
     with open(file_name, "w") as file:
         json.dump(category_indices, file, indent=4)
+
+
+def test_system():
+    rec = ArtRecSystem(metric="cosine")
+    while 1:
+        rating = input("get rating:")
+
+        # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
+        rec_img, rec_prompt, rec_words = rec(rating)
+        print(rec_prompt)
 test_system()
+
