@@ -45,6 +45,7 @@ class ArtRecSystem:
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
         self._matrices = np.zeros((total_iterations, 6, 768))
+        self._art_indices = []
         self._user_matrix = np.zeros((6, 768))
         self._cur_embeddings = np.zeros((6, 768))  # currently recommended words
 
@@ -160,16 +161,15 @@ class ArtRecSystem:
             ]
             + self._category_indices["artists"][0]
         )
+        self._art_indices.append(int(closest_artist_and_movement[0]) - 28)
         closest_medium = (
             self._nn_mediums.kneighbors([self._user_matrix[2]])[1][
                 :, self.get_val_rand_k(self._total_mediums)
             ]
             + self._category_indices["mediums"][0]
         )
-        indices = self._nn_modifiers.kneighbors(self._user_matrix[3:])[1]
-        columns_selected = self.get_val_rand_k(self._total_modifiers, size=3)
-  
-        closest_modifiers = columns_selected + self._category_indices["descriptive terms"][0]
+        closest_modifiers = self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:,self.get_val_rand_k(self._total_modifiers, size=3)][0] + self._category_indices["descriptive terms"][0]
+
 
         indices = np.concatenate(
             (
@@ -254,8 +254,9 @@ class ArtRecSystem:
                 self._category_indices["artists"][0],
                 self._category_indices["descriptive terms"][0],
             ),
-            size=1,
+            size=1
         )
+        self._art_indices.append(int(artists_and_movements[0]) - 28) 
         mediums = np.random.choice(
             range(
                 self._category_indices["mediums"][0],
@@ -271,7 +272,6 @@ class ArtRecSystem:
 
         # rating = input("rate from -1 to 1: ")
         # self._user_matrix += float(rating) * self._all_embeddings[indices]
-
 
 # change to main to get embeddings if they are not there
 if __name__ == "__main__":
@@ -391,5 +391,5 @@ def test_system():
         # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
         rec_img, rec_prompt, rec_words = rec(rating)
         print(rec_prompt)
-
+test_system()
 
