@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import tensorflow as tf
+
 from tensorflow import keras
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Layer, Input, Dense
@@ -115,46 +116,49 @@ class Engagement_Classifier:
 
 # Class just for inference - loads in weights and uses model to predict
 class EngagementClassifierInference:
-    # Build model and load weights
     def __init__(self):
-        inp_emo = keras.Input((10, 48, 48, 1))
-        inp_open = keras.Input((300, 300, 1))
+        # Ensure that the model initialization also happens on the CPU
+        with tf.device('/cpu:0'):
+            inp_emo = Input((10, 48, 48, 1))
+            inp_open = Input((300, 300, 1))
 
-        emoti_model = Emotion_Regressor()
-        focus_model = Focus_Regressor()
+            emoti_model = Emotion_Regressor()
+            focus_model = Focus_Regressor()
 
-        x = AggregationLayer(emoti_model, focus_model, 10)([inp_emo, inp_open])
-        
-        output = Dense(1)(x)
+            x = AggregationLayer(emoti_model, focus_model, 10)([inp_emo, inp_open])
 
-        self.model = Model([inp_emo, inp_open], output)
-        
-        weights_path = os.path.join("Models", "Engagement_Model_weights.h5")
-        self.model.load_weights(weights_path)
+            output = Dense(1)(x)
 
-    # Pred function
+            self.model = Model([inp_emo, inp_open], output)
+            
+            weights_path = os.path.join("Models", "Engagement_Model_weights.h5")
+            self.model.load_weights(weights_path)
+
     def predict_engagement(self, emotion_features, openface_features):
-        emotion_features = np.expand_dims(emotion_features, axis=0)
-        openface_features = np.expand_dims(openface_features, axis=0)
-        
-        engagement_score = self.model.predict([emotion_features, openface_features])
-        return engagement_score
-    
-    # Applying PCA
+        with tf.device('/cpu:0'):  # Explicitly using CPU for inference
+            emotion_features = np.expand_dims(emotion_features, axis=0)
+            openface_features = np.expand_dims(openface_features, axis=0)
+            
+            engagement_score = self.model.predict([emotion_features, openface_features])
+            return engagement_score
+
     def get_open_inference(self, open_features):
-        # Get saved scaler and pca file paths
-        pca_path = os.path.join("Models", "pca.pkl")
+        with tf.device('/cpu:0'):  # Also ensure this part runs on CPU if it involves any computation
+            # Get saved scaler and pca file paths
+            pca_path = os.path.join("Models", "pca.pkl")
 
-        # Load the PCA models
-        scaler = MinMaxScaler()
-        with open(pca_path, 'rb') as f:
-            pca = pk.load(f)
-        
-        # Normalize the feature set and apply pca
-        open_features_normalized = scaler.fit_transform(open_features)
-        open_features_pca = pca.transform(open_features_normalized)
+            # Load the PCA models
+            scaler_path = os.path.join("Models", "scaler.pkl")
+            with open(pca_path, 'rb') as f:
+                pca = pk.load(f)
+            with open(scaler_path, 'rb') as f:
+                scaler = pk.load(f)
+            
+            # Normalize the feature set and apply pca
+            open_features_normalized = scaler.fit_transform(open_features)
+            open_features_pca = pca.transform(open_features_normalized)
 
-        return open_features_pca
+            return open_features_pca
 
 
 # x_train, y_train, x_val, y_val = build_dataset()
