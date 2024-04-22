@@ -36,6 +36,7 @@ class ArtRecSystem:
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
         self._matrices = np.zeros((total_iterations, 6, 768))
+        
         self._rec_embed_indices = []
         self._cur_embeddings = np.zeros(( 6, 768))
         self._user_matrix = np.zeros((6, 768))
