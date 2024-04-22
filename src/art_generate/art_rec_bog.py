@@ -8,20 +8,10 @@ import os
 import sys
 import signal
 import math
-
-history = {}
-
-history["rec_prompts"] = []
-history["rec_imgs"] = []
-history["rec_words"] = []
+from datetime import datetime
 
 
-def signal_handler(sig, frame):
-    print("saving history")
-    sys.exit(0)
 
-
-signal.signal(signal.SIGINT, signal_handler)
 
 
 class ArtRecSystem:
@@ -38,6 +28,7 @@ class ArtRecSystem:
         art_generate=False,  # determines whether art will be outputted
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
+        signal.signal(signal.SIGINT, self.signal_handler)
         logging.basicConfig(level=logging.DEBUG)
         gars_path = os.environ["GARS_PROJ"]
         gars_art_path = os.path.join(gars_path, "art_generate")
@@ -45,10 +36,9 @@ class ArtRecSystem:
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
         self._matrices = np.zeros((total_iterations, 6, 768))
-        self._art_indices = []
+        self._rec_embed_indices = []
+        self._cur_embeddings = np.zeros(( 6, 768))
         self._user_matrix = np.zeros((6, 768))
-        self._cur_embeddings = np.zeros((6, 768))  # currently recommended words
-
         self._plaintext_words = np.load(
             f"{gars_art_path}/data_prompts/numpy/plaintext_words.npy"
         )
@@ -59,6 +49,9 @@ class ArtRecSystem:
         self._metric = metric
         self._iteration = 0
         self._max_jump = 1 / 3
+        self._ratings = []
+        self._cur_dir = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        os.mkdir(self._cur_dir)
         self_cur_embeddings = np.zeros(
             (6, 768)
         )  # current embeddings of words that were recommended
@@ -136,9 +129,16 @@ class ArtRecSystem:
         self._nn_modifiers.fit(
             self._all_embeddings[self._category_indices["descriptive terms"][0] :]
         )
-
+        gars_path = os.environ["GARS_PROJ"]
+        self._gars_art_path = os.path.join(gars_path, "art_generate")
     # cc    breakpoint()
     # potentially adjust decay rate
+    def signal_handler(self,sig, frame):
+        logging.info("SAVING CURRENT STATE")
+        self.save_state()
+        sys.exit(0)
+       
+
     def get_val_rand_k(self, total, size=None):
         """gets random top k value lowering k as iterations increase"""
         k = self.exp_decay(total)
@@ -161,7 +161,6 @@ class ArtRecSystem:
             ]
             + self._category_indices["artists"][0]
         )
-        self._art_indices.append(int(closest_artist_and_movement[0]) - 28)
         closest_medium = (
             self._nn_mediums.kneighbors([self._user_matrix[2]])[1][
                 :, self.get_val_rand_k(self._total_mediums)
@@ -170,7 +169,7 @@ class ArtRecSystem:
         )
         closest_modifiers = self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:,self.get_val_rand_k(self._total_modifiers, size=3)][0] + self._category_indices["descriptive terms"][0]
 
-
+        self._rec_embed_indices.append([int(closest_subject), int(closest_artist_and_movement), int(closest_medium),  closest_modifiers.tolist()])
         indices = np.concatenate(
             (
                 closest_subject,
@@ -219,21 +218,36 @@ class ArtRecSystem:
 
     def __call__(self, rating=0):
         """function to get recommendation given a rating"""
-
+        
+        self._ratings.append(rating)
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
             rec_words = self.sampling_stage(rating)
             rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
+            self._matrices[self._iteration] += self._user_matrix
+
             self._iteration += 1
+            
             return (
                 self.generate_image(rec_prompt),
                 rec_prompt,
                 rec_words,
             )
         rec_words = self.find_closest(rating)
+        
         rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
         self._iteration += 1
         return self.generate_image(rec_prompt), rec_prompt, rec_words
+    def save_state(self):
+            with open(f"{self._cur_dir}/rec_embed_indices.json", "w") as fp:
+                json.dump(self._rec_embed_indices, fp)
+
+            with open(f"{self._cur_dir}/ratings.json", "w") as fp:
+                json.dump(self._ratings, fp,  indent = 4)
+
+            np.save(f"{self._cur_dir}/user_matrices.npy", self._matrices)
+            
+
 
     def sampling_stage(self, rating):
         # cold starting rec system
@@ -256,7 +270,6 @@ class ArtRecSystem:
             ),
             size=1
         )
-        self._art_indices.append(int(artists_and_movements[0]) - 28) 
         mediums = np.random.choice(
             range(
                 self._category_indices["mediums"][0],
@@ -264,12 +277,14 @@ class ArtRecSystem:
             ),
             size=1,
         )
+        self._rec_embed_indices.append([int(subject), int(artists_and_movements), int(mediums),  modifiers.tolist()])
         indices = np.concatenate((subject, artists_and_movements, mediums, modifiers))
-
         self._cur_embeddings = self._all_embeddings[indices]
 
         return self._plaintext_words[indices]
+        
 
+       
         # rating = input("rate from -1 to 1: ")
         # self._user_matrix += float(rating) * self._all_embeddings[indices]
 
@@ -391,5 +406,5 @@ def test_system():
         # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
         rec_img, rec_prompt, rec_words = rec(rating)
         print(rec_prompt)
-test_system()
+#test_system()
 
