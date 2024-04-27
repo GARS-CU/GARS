@@ -53,33 +53,32 @@ class Focus_Calibrator:
       
     
         #right wall
-        right_mask = (radians <= np.pi/4) & (radians > -np.pi/4)
+        right_mask = ((radians <= np.pi/4) & (radians > 0)) | ((radians <= 0) & (radians >=  -np.pi/4))
 
         y_right_wall = slope[right_mask]*self.gaze_angle_xmax+b[right_mask]
         distance_from_center[right_mask] = distance(self.gaze_angle_xmax-self.gaze_angle_xcenter, y_right_wall - self.gaze_angle_ycenter)
         
         #upper wall
-        upper_mask = (radians > np.pi/4) & (radians <= 3*np.pi/4)
+        upper_mask = (radians > np.pi/4) & (radians < 3*np.pi/4) 
         x_upper_wall = (self.gaze_angle_ymax - b[upper_mask])/slope[upper_mask]
         distance_from_center[upper_mask] = distance(x_upper_wall -self.gaze_angle_xcenter, self.gaze_angle_ymax - self.gaze_angle_ycenter)
         
         
         #left wall
-        left_mask = (radians > (3*np.pi/4)) & (radians >= -3*np.pi/4)
+        left_mask = ((radians >= 3*np.pi/4) & (radians <= np.pi)) |  ((radians >= -np.pi) & (radians <= -3*np.pi/4))
         y_left_wall = slope[left_mask]*self.gaze_angle_xmin+b[left_mask]
         distance_from_center[left_mask] = distance(self.gaze_angle_xmin - self.gaze_angle_xcenter, y_left_wall - self.gaze_angle_ycenter)
     
         #breakpoint()
         
-        bottom_mask = (radians < -np.pi/4) & (radians >= -(3*np.pi/4))
+        bottom_mask = (radians < -np.pi/4) & (radians > -(3*np.pi/4))
         y_bottom_wall = (self.gaze_angle_ymax - b[bottom_mask])/slope[bottom_mask]
      
         distance_from_center[bottom_mask] = distance( y_bottom_wall  - self.gaze_angle_xcenter, self.gaze_angle_ymin - self.gaze_angle_ycenter)
-    
+
         eye_gaze_focus = 1 - (distance_from_center_to_gaze/distance_from_center)    
 
         return eye_gaze_focus
-gaze_tracker = Focus_Calibrator('~/processed/demo.csv') 
-gaze_tracker('~/processed/demo.csv')
 
-        
+gaze_tracker = Focus_Calibrator('processed/calibrate.csv')
+gaze_tracker('processed/calibrate.csv')
