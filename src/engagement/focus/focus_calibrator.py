@@ -13,7 +13,7 @@ class Focus_Calibrator:
         self.gaze_angle_xmax = gaze_angle_x.max()
         self.gaze_angle_xcenter = (self.gaze_angle_xmax + self.gaze_angle_xmin)/2
         
-        self.gaze_angle_ymin = gaze_angle_x.min()
+        self.gaze_angle_ymin = gaze_angle_y.min()
         self.gaze_angle_ymax = gaze_angle_y.max()
         self.gaze_angle_ycenter = (self.gaze_angle_ymax + self.gaze_angle_ymin)/2
   
