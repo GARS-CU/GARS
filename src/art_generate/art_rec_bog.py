@@ -22,10 +22,9 @@ class ArtRecSystem:
         self,
         metric,
         decay_rate=0.6,
-        sample_size=10,
         sample_stage_size=5,
         max_jump=1 / 1000,
-        total_iterations=10,
+        total_iterations=5,
         art_generate=False,  # determines whether art will be outputted
         embed_type="sbert"
     ):
@@ -34,14 +33,13 @@ class ArtRecSystem:
         logging.basicConfig(level=logging.DEBUG)
         gars_path = os.environ["GARS_PROJ"]
         gars_art_path = os.path.join(gars_path, "art_generate")
-        self._sample_size = sample_size
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
         if embed_type == "openai":
             self._ndim = 1536
         else:
             self._ndim = 768
-        self._matrices = np.zeros((total_iterations, 6, self._ndim))
+        self._matrices = np.zeros((total_iterations + sample_stage_size, 6, self._ndim))
 
         self._rec_embed_indices = []
         self._cur_embeddings = np.zeros((6, self._ndim))
@@ -239,7 +237,11 @@ class ArtRecSystem:
 
     def __call__(self, rating=0):
         """function to get recommendation given a rating"""
-
+        logging.debug(f"iteration count:{self._iteration}")
+        if self._iteration == self._user_sample_stage_size + self._total_iterations:
+            self.save_state()
+            sys.exit(0)
+        
         self._ratings.append(rating)
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
@@ -661,12 +663,14 @@ if __name__ == "__main2__":
 
 
 def test_system():
-    rec = ArtRecSystem(metric="cosine", embed_type="sbert")
+    rec = ArtRecSystem(metric="cosine", embed_type="openai")
+    breakpoint()
     while 1:
         rating = input("get rating:")
 
         # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
         rec_img, rec_prompt, rec_words = rec(rating)
+        
         print(rec_prompt)
 
 #test_system()
