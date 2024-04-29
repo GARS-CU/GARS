@@ -9,9 +9,10 @@ import sys
 import signal
 import math
 from datetime import datetime
-
-
-
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
 class ArtRecSystem:
@@ -24,8 +25,9 @@ class ArtRecSystem:
         sample_size=10,
         sample_stage_size=5,
         max_jump=1 / 1000,
-        total_iterations=20,
+        total_iterations=10,
         art_generate=False,  # determines whether art will be outputted
+        embed_type="sbert"
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -35,26 +37,32 @@ class ArtRecSystem:
         self._sample_size = sample_size
         self._decay_rate = decay_rate
         self._user_sample_stage_size = sample_stage_size
-        self._matrices = np.zeros((total_iterations, 6, 768))
-        
+        if embed_type == "openai":
+            self._ndim = 1536
+        else:
+            self._ndim = 768
+        self._matrices = np.zeros((total_iterations, 6, self._ndim))
+
         self._rec_embed_indices = []
-        self._cur_embeddings = np.zeros(( 6, 768))
-        self._user_matrix = np.zeros((6, 768))
+        self._cur_embeddings = np.zeros((6, self._ndim))
+        self._user_matrix = np.zeros((6, self._ndim))
         self._plaintext_words = np.load(
             f"{gars_art_path}/data_prompts/numpy/plaintext_words.npy"
         )
         self._all_embeddings = np.load(
-            f"{gars_art_path}/data_prompts/numpy/all_embeddings.npy"
+            f"{gars_art_path}/data_prompts/numpy/{embed_type}/all_embeddings.npy"
         )
+
         self._total_iterations = total_iterations
         self._metric = metric
         self._iteration = 0
         self._max_jump = 1 / 3
         self._ratings = []
         self._cur_dir = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        os.mkdir(self._cur_dir)
+        os.mkdir(f"logs/{self._cur_dir}")
+        self._cur_dir = f"logs/{self._cur_dir}"
         self_cur_embeddings = np.zeros(
-            (6, 768)
+            (6, self._ndim)
         )  # current embeddings of words that were recommended
         if metric == "cosine":
             self.scoring = self.moving_cosine_dist
@@ -132,13 +140,13 @@ class ArtRecSystem:
         )
         gars_path = os.environ["GARS_PROJ"]
         self._gars_art_path = os.path.join(gars_path, "art_generate")
+
     # cc    breakpoint()
     # potentially adjust decay rate
-    def signal_handler(self,sig, frame):
+    def signal_handler(self, sig, frame):
         logging.info("SAVING CURRENT STATE")
         self.save_state()
         sys.exit(0)
-       
 
     def get_val_rand_k(self, total, size=None):
         """gets random top k value lowering k as iterations increase"""
@@ -168,9 +176,21 @@ class ArtRecSystem:
             ]
             + self._category_indices["mediums"][0]
         )
-        closest_modifiers = self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][:,self.get_val_rand_k(self._total_modifiers, size=3)][0] + self._category_indices["descriptive terms"][0]
+        closest_modifiers = (
+            self._nn_modifiers.kneighbors(self._user_matrix[3:])[1][
+                :, self.get_val_rand_k(self._total_modifiers, size=3)
+            ][0]
+            + self._category_indices["descriptive terms"][0]
+        )
 
-        self._rec_embed_indices.append([int(closest_subject), int(closest_artist_and_movement), int(closest_medium),  closest_modifiers.tolist()])
+        self._rec_embed_indices.append(
+            [
+                int(closest_subject),
+                int(closest_artist_and_movement),
+                int(closest_medium),
+                *closest_modifiers.tolist(),
+            ]
+        )
         indices = np.concatenate(
             (
                 closest_subject,
@@ -219,7 +239,7 @@ class ArtRecSystem:
 
     def __call__(self, rating=0):
         """function to get recommendation given a rating"""
-        
+
         self._ratings.append(rating)
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
@@ -228,27 +248,240 @@ class ArtRecSystem:
             self._matrices[self._iteration] += self._user_matrix
 
             self._iteration += 1
-            
+
             return (
                 self.generate_image(rec_prompt),
                 rec_prompt,
                 rec_words,
             )
         rec_words = self.find_closest(rating)
-        
+
         rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
+        self._matrices[self._iteration] += self._user_matrix
         self._iteration += 1
         return self.generate_image(rec_prompt), rec_prompt, rec_words
+
+    def create_plots(
+        self, plaintext_words, total_embeddings, user_embeddings, rec_indices, title
+    ):
+        """
+        create plotly figures vector spaces
+        """
+
+        pca = PCA(n_components=3)
+        scaler = StandardScaler()
+        all_embeddings = np.concatenate((total_embeddings, user_embeddings))
+
+        x = scaler.fit_transform(all_embeddings)
+        z = pca.fit_transform(x)
+        len_user = len(user_embeddings)
+
+        z_user = z[-len_user:]
+        z_embed = z[:-len_user]
+        z_rec_words = z[rec_indices]
+
+        fig = make_subplots(
+            rows=1,
+            cols=3,
+            specs=[
+                [{"type": "scatter3d"}, {"type": "scatter3d"}, {"type": "scatter3d"}]
+            ],
+            subplot_titles=("Embedding Space", "Reccomended Words", "User Vector"),
+        )
+        fig.update_layout(title=title)
+        fig.add_trace(
+            go.Scatter3d(
+                x=z_embed[:, 0],  # First PCA component
+                y=z_embed[:, 1],  # Second PCA component
+                z=z_embed[:, 2],  # Third PCA component
+                mode="markers",
+                marker=dict(
+                    size=5,
+                    color=z[:, 0],  # Color points by the first PCA component
+                    colorscale="Viridis",  # Color scale
+                    opacity=0.8,
+                ),
+                text=plaintext_words,  # Labels for each point
+            ),
+            row=1,
+            col=1,
+        )
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=z_rec_words[:, 0],  # First PCA component
+                y=z_rec_words[:, 1],  # Second PCA component
+                z=z_rec_words[:, 2],  # Third PCA component
+                mode="lines+markers",
+                marker=dict(
+                    size=5,
+                    color=z[:, 0],  # Color points by the first PCA component
+                    colorscale="Viridis",  # Color scale
+                    opacity=0.8,
+                ),
+                text=plaintext_words[rec_indices],  # Labels for each point
+            ),
+            row=1,
+            col=2,
+        )
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=z_user[:, 0],  # First PCA component
+                y=z_user[:, 1],  # Second PCA component
+                z=z_user[:, 2],  # Third PCA component
+                mode="lines+markers",
+                marker=dict(
+                    size=5,
+                    color=z[:, 0],  # Color points by the first PCA component
+                    colorscale="Viridis",  # Color scale
+                    opacity=0.8,
+                ),
+            ),
+            row=1,
+            col=3,
+        )
+        sliders = [
+            dict(
+                steps=[
+                    dict(
+                        method="animate",
+                        args=[
+                            [f"name-{i}"],
+                            dict(
+                                mode="immediate",
+                                frame=dict(duration=500, redraw=True),
+                                fromcurrent=True,
+                            ),
+                        ],
+                        label=f"Frame {i}",
+                    )
+                    for i, _ in enumerate(fig.frames)
+                ],
+                transition=dict(duration=300),
+                x=0,  # Slider starting position
+                y=0,  # Slider vertical position
+                currentvalue=dict(
+                    font=dict(size=12), prefix="Frame: ", visible=True, xanchor="center"
+                ),
+                len=1.0,
+            )
+        ]  # Slider length
+
+        # Add play and stop buttons
+        updatemenus = [
+            dict(
+                type="buttons",
+                showactive=False,
+                y=1,  # Button vertical position
+                x=0.1,  # Button horizontal position
+                xanchor="right",
+                yanchor="top",
+                buttons=[
+                    dict(
+                        label="Play",
+                        method="animate",
+                        args=[
+                            None,
+                            dict(
+                                frame=dict(duration=500, redraw=True),
+                                fromcurrent=True,
+                                transition=dict(duration=300),
+                            ),
+                        ],
+                    ),
+                    dict(
+                        label="Pause",
+                        method="animate",
+                        args=[
+                            [None],
+                            dict(
+                                frame=dict(duration=0, redraw=False), mode="immediate"
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ]
+
+        # Update the layout with sliders and buttons
+        fig.update_layout(sliders=sliders, updatemenus=updatemenus)
+        frames = [
+            go.Frame(
+                data=[
+                    go.Scatter3d(
+                        x=z_rec_words[:, 0][:k],  # Similar update for trace 1
+                        y=z_rec_words[:, 1][:k],
+                        z=z_rec_words[:, 2][:k],
+                        mode="lines+markers",
+                        marker=dict(size=5, colorscale="Viridis", opacity=0.8),
+                    ),
+                    go.Scatter3d(
+                        x=z_user[:, 0][
+                            :k
+                        ],  # Different update for trace 2, maybe a different range or pattern
+                        y=z_user[:, 1][:k],
+                        z=z_user[:, 2][:k],
+                        mode="lines+markers",
+                        marker=dict(size=5, colorscale="Viridis", opacity=0.8),
+                    ),
+                ],
+                traces=[
+                    1,
+                    2,
+                ],  # Update all three traces, but with different data for trace 2
+            )
+            for k in range(0, len(rec_indices))
+        ]
+
+        fig.frames = frames
+
+        return fig
+
+    def save_plots(self):
+        terms_list = [
+            self._category_indices["subjects"],
+            self._category_indices["artists"],
+            self._category_indices["mediums"],
+            self._category_indices["descriptive terms"],
+            self._category_indices["descriptive terms"],
+            self._category_indices["descriptive terms"],
+        ]
+        titles = [
+            "Subjects",
+            "style-art movements",
+            "Medium",
+            "Modifier 0",
+            "Modifier 1",
+            "Modifier 2",
+        ]
+        numpy_list = np.array(self._rec_embed_indices)
+        for i in range(len(terms_list)):
+            fig = self.create_plots(
+                plaintext_words=self._plaintext_words[ terms_list[i][0] : terms_list[i][1] + 1],
+                total_embeddings=self._all_embeddings[
+                    terms_list[i][0] : terms_list[i][1] + 1
+                ],
+                user_embeddings=self._matrices[:, i],
+                rec_indices=numpy_list[:, i] - terms_list[i][0],
+                title=titles[i],
+            )
+            fig.write_html(f"{self._cur_dir}/{titles[i]}.html")
+
+        return True
+
+    # animations
+
     def save_state(self):
-            with open(f"{self._cur_dir}/rec_embed_indices.json", "w") as fp:
-                json.dump(self._rec_embed_indices, fp)
+        with open(f"{self._cur_dir}/rec_embed_indices.json", "w") as fp:
+            json.dump(self._rec_embed_indices, fp)
 
-            with open(f"{self._cur_dir}/ratings.json", "w") as fp:
-                json.dump(self._ratings, fp,  indent = 4)
+        with open(f"{self._cur_dir}/ratings.json", "w") as fp:
+            json.dump(self._ratings, fp, indent=4)
 
-            np.save(f"{self._cur_dir}/user_matrices.npy", self._matrices)
-            
+        np.save(f"{self._cur_dir}/user_matrices.npy", self._matrices)
 
+        self.save_plots()
 
     def sampling_stage(self, rating):
         # cold starting rec system
@@ -269,7 +502,7 @@ class ArtRecSystem:
                 self._category_indices["artists"][0],
                 self._category_indices["descriptive terms"][0],
             ),
-            size=1
+            size=1,
         )
         mediums = np.random.choice(
             range(
@@ -278,19 +511,41 @@ class ArtRecSystem:
             ),
             size=1,
         )
-        self._rec_embed_indices.append([int(subject), int(artists_and_movements), int(mediums),  modifiers.tolist()])
+
+        self._rec_embed_indices.append(
+            [
+                int(subject),
+                int(artists_and_movements),
+                int(mediums),
+                *modifiers.tolist(),
+            ]
+        )
         indices = np.concatenate((subject, artists_and_movements, mediums, modifiers))
         self._cur_embeddings = self._all_embeddings[indices]
 
         return self._plaintext_words[indices]
-        
 
-       
         # rating = input("rate from -1 to 1: ")
         # self._user_matrix += float(rating) * self._all_embeddings[indices]
 
 # change to main to get embeddings if they are not there
-if __name__ == "__main__":
+if __name__ == "__main2__":
+    if len(sys.argv) > 1:
+        argument = sys.argv[1]
+    
+    if argument == "openai":
+        import openai
+        openai.api_key = os.getenv('OPENAI_API_KEY')
+        embed_path = "openai"
+    else:
+        embed_path = "sbert"
+    def get_embedding_open_ai(text, model="text-embedding-3-small"):
+        print(text)
+        return openai.embeddings.create(input = [text], model=model).data[0].embedding
+    
+    def encode_embeddings_openai(words):
+        return  np.array([get_embedding_open_ai(word) for word in words])
+
     from sentence_transformers import SentenceTransformer
 
     gars_path = os.environ["GARS_PROJ"]
@@ -324,26 +579,32 @@ if __name__ == "__main__":
     artists_and_movements = np.concatenate((artists, art_movements))
     with open(f"{gars_art_path}/data_prompts/categories/art_mediums.txt") as f:
         art_mediums = f.read().split("\n")
-    model = SentenceTransformer("all-mpnet-base-v2")
 
-    subject_embeddings = model.encode(subjects)
-    art_mediums_embeddings = model.encode(art_mediums)
-    artists_and_movements_embeddings = model.encode(artists_and_movements)
-    descriptive_words_embeddings = model.encode(descriptive_words)
+    if embed_path == "openai":
+        subject_embeddings = encode_embeddings_openai(subjects)
+        art_mediums_embeddings = encode_embeddings_openai(art_mediums)
+        artists_and_movements_embeddings = encode_embeddings_openai(artists_and_movements)
+        descriptive_words_embeddings = encode_embeddings_openai(descriptive_words)
+    else:
+        model = SentenceTransformer("all-mpnet-base-v2")
+        subject_embeddings = model.encode(subjects)
+        art_mediums_embeddings = model.encode(art_mediums)
+        artists_and_movements_embeddings = model.encode(artists_and_movements)
+        descriptive_words_embeddings = model.encode(descriptive_words)
 
     np.save(
         f"{gars_art_path}/data_prompts/numpy/subject_embeddings.npy", subject_embeddings
     )
     np.save(
-        f"{gars_art_path}/data_prompts/numpy/art_mediums_embeddings.npy",
+        f"{gars_art_path}/data_prompts/numpy/{embed_path}/art_mediums_embeddings.npy",
         art_mediums_embeddings,
     )
     np.save(
-        f"{gars_art_path}/data_prompts/numpy/artists_embeddings.npy",
+        f"{gars_art_path}/data_prompts/numpy/{embed_path}/artists_embeddings.npy",
         artists_and_movements,
     )
     np.save(
-        f"{gars_art_path}/data_prompts/numpy/modifiers_embeddings.npy",
+        f"{gars_art_path}/data_prompts/numpy/{embed_path}/modifiers_embeddings.npy",
         descriptive_words_embeddings,
     )
 
@@ -380,7 +641,7 @@ if __name__ == "__main__":
     ]
 
     np.save(
-        f"{gars_art_path}/data_prompts/numpy/all_embeddings.npy",
+        f"{gars_art_path}/data_prompts/numpy/{embed_path}/all_embeddings.npy",
         np.concatenate(
             (
                 subject_embeddings,
@@ -400,12 +661,13 @@ if __name__ == "__main__":
 
 
 def test_system():
-    rec = ArtRecSystem(metric="cosine")
+    rec = ArtRecSystem(metric="cosine", embed_type="sbert")
     while 1:
         rating = input("get rating:")
 
         # [descrptive term] [subject] [style] [medium] [modifer] [modifier]
         rec_img, rec_prompt, rec_words = rec(rating)
         print(rec_prompt)
+
 #test_system()
 
