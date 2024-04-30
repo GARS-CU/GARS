@@ -80,5 +80,5 @@ class Focus_Calibrator:
 
         return eye_gaze_focus
 
-gaze_tracker = Focus_Calibrator('processed/calibrate.csv')
-gaze_tracker('processed/calibrate.csv')
+#gaze_tracker = Focus_Calibrator('processed/calibrate.csv')
+#gaze_tracker('processed/calibrate.csv')

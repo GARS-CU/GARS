@@ -24,12 +24,12 @@ class ArtRecSystem:
         decay_rate=0.6,
         sample_stage_size=5,
         max_jump=1 / 1000,
-        total_iterations=5,
+        total_iterations=18,
         art_generate=False,  # determines whether art will be outputted
-        embed_type="sbert"
+        embed_type="openai"
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
-        signal.signal(signal.SIGINT, self.signal_handler)
+        #signal.signal(signal.SIGINT, self.signal_handler)
         logging.basicConfig(level=logging.DEBUG)
         gars_path = os.environ["GARS_PROJ"]
         gars_art_path = os.path.join(gars_path, "art_generate")
@@ -39,7 +39,7 @@ class ArtRecSystem:
             self._ndim = 1536
         else:
             self._ndim = 768
-        self._matrices = np.zeros((total_iterations + sample_stage_size, 6, self._ndim))
+        self._matrices = np.zeros((total_iterations + sample_stage_size + 2, 6, self._ndim))
 
         self._rec_embed_indices = []
         self._cur_embeddings = np.zeros((6, self._ndim))
@@ -57,8 +57,8 @@ class ArtRecSystem:
         self._max_jump = 1 / 3
         self._ratings = []
         self._cur_dir = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        os.mkdir(f"logs/{self._cur_dir}")
-        self._cur_dir = f"logs/{self._cur_dir}"
+        os.mkdir(f"{gars_art_path}/logs/{self._cur_dir}")
+        self._cur_dir = f"{gars_art_path}/logs/{self._cur_dir}"
         self_cur_embeddings = np.zeros(
             (6, self._ndim)
         )  # current embeddings of words that were recommended
@@ -85,6 +85,7 @@ class ArtRecSystem:
             - self._category_indices["subjects"][0]
             + 1
         )
+        self._total_subjects = math.ceil(self._total_subjects/ 2)
         self._nn_subjects = NearestNeighbors(
             n_neighbors=self._total_subjects, metric=metric
         )
@@ -106,7 +107,7 @@ class ArtRecSystem:
                 self._category_indices["mediums"][0] : self._category_indices[
                     "artists"
                 ][0]
-            ]
+           ]
         )
         self._total_artists_movements = (
             self._category_indices["artists"][1]
@@ -144,7 +145,6 @@ class ArtRecSystem:
     def signal_handler(self, sig, frame):
         logging.info("SAVING CURRENT STATE")
         self.save_state()
-        sys.exit(0)
 
     def get_val_rand_k(self, total, size=None):
         """gets random top k value lowering k as iterations increase"""
@@ -207,7 +207,7 @@ class ArtRecSystem:
 
     def exp_decay(self, total):
         """decay  the amount of nearest neighbors so it approaches 1 after final iteration"""
-        self._non_sample_iter = self._iteration - self._user_sample_stage_size
+        self._non_sample_iter = self._iteration - self._user_sample_stage_size 
         r = (1 / total) ** (1 / (self._total_iterations))
         return math.ceil(total * r ** (self._non_sample_iter))
 
@@ -238,10 +238,8 @@ class ArtRecSystem:
     def __call__(self, rating=0):
         """function to get recommendation given a rating"""
         logging.debug(f"iteration count:{self._iteration}")
-        if self._iteration == self._user_sample_stage_size + self._total_iterations:
+        if self._iteration == self._user_sample_stage_size + self._total_iterations + 2:
             self.save_state()
-            sys.exit(0)
-        
         self._ratings.append(rating)
         # sampling stage
         if self._iteration < self._user_sample_stage_size:
@@ -250,7 +248,7 @@ class ArtRecSystem:
             self._matrices[self._iteration] += self._user_matrix
 
             self._iteration += 1
-
+            logging.debug("\n")
             return (
                 self.generate_image(rec_prompt),
                 rec_prompt,
@@ -261,7 +259,9 @@ class ArtRecSystem:
         rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
         self._matrices[self._iteration] += self._user_matrix
         self._iteration += 1
+        logging.debug("\n") 
         return self.generate_image(rec_prompt), rec_prompt, rec_words
+
 
     def create_plots(
         self, plaintext_words, total_embeddings, user_embeddings, rec_indices, title
@@ -475,6 +475,7 @@ class ArtRecSystem:
     # animations
 
     def save_state(self):
+        print("SAVING CURRENT STATE")
         with open(f"{self._cur_dir}/rec_embed_indices.json", "w") as fp:
             json.dump(self._rec_embed_indices, fp)
 
@@ -663,8 +664,8 @@ if __name__ == "__main2__":
 
 
 def test_system():
-    rec = ArtRecSystem(metric="cosine", embed_type="openai")
-    breakpoint()
+    rec = ArtRecSystem(metric="cosine", embed_type="openai")#
+    #breakpoint()
     while 1:
         rating = input("get rating:")
 
