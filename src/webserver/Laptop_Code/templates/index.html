@@ -6,30 +6,57 @@
     <style>
         body {
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
+            transition: padding-left 0.3s ease-in-out;
         }
         #left-content {
-            flex: 1;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 350px;
+            overflow: auto;
+            display: none;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-right: 2px solid #ccc;
         }
         #generated-art-container {
-            flex: 1;
             display: flex;
+            flex-direction: column; /* Changed to column */
             justify-content: center;
             align-items: center;
+            width: 100%;
+            height: 100vh;
         }
         #generated-art {
             max-width: 100%;
-            max-height: 100vh;
-            border: 2px solid #000;
+            max-height: 80vh; /* Adjusted max-height to give space for button and status */
+            object-fit: contain;
+            margin-bottom: 20px; /* Added margin below image */
+        }
+        #toggle-debug {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        #video {
+            max-width: 100%;
+            height: auto;
+            padding-top: 50px;
+        }
+        #sessionBtn, #status {
+            margin-top: 10px; /* Added spacing for button and status */
         }
     </style>
 </head>
 <body>
+    <button id="toggle-debug">Debug Mode Off</button>
     <div id="left-content">
         <video id="video" width="640" height="480" autoplay></video>
-        <button id="recordBtn">Record Video</button>
-        <p id="status">Press the button to generate new art.</p>
         <p id="engagement-score">Engagement Score: </p>
+        <p id="average-duration">Average Time Spent On Art: </p>
         <p>
             <input type="number" id="scoreInput" step="0.01" min="-1" max="1" placeholder="Enter engagement score (-1 to 1)">
             <button id="submitScoreBtn">Submit Score</button>
@@ -37,7 +64,31 @@
     </div>
     <div id="generated-art-container">
         <img id="generated-art" src="" alt="Generated Art Will Appear Here">
+        <button id="sessionBtn">Start Session</button>
+        <p id="status">Press the "Start Session" button to begin.</p>
     </div>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script>
+        const debugButton = document.getElementById('toggle-debug');
+        const leftContent = document.getElementById('left-content');
+        const artContainer = document.getElementById('generated-art-container');
+        let debugMode = false;
+    
+        debugButton.addEventListener('click', () => {
+            debugMode = !debugMode;
+            if (debugMode) {
+                leftContent.style.display = 'block';
+                artContainer.style.marginLeft = '350px'; 
+                artContainer.style.width = 'calc(100% - 350px)';
+                debugButton.textContent = 'Debug Mode On';
+            } else {
+                leftContent.style.display = 'none';
+                artContainer.style.marginLeft = '0px';
+                artContainer.style.width = '100%';
+                debugButton.textContent = 'Debug Mode Off';
+            }
+        });
+    </script>
+    
 </body>
 </html>

@@ -153,9 +153,10 @@ class EngagementClassifierInference:
                 pca = pk.load(f)
             with open(scaler_path, 'rb') as f:
                 scaler = pk.load(f)
-            
+            #scaler = MinMaxScaler()
+            #pca = PCA(n_components = 300)
             # Normalize the feature set and apply pca
-            open_features_normalized = scaler.fit_transform(open_features)
+            open_features_normalized = scaler.transform(open_features)
             open_features_pca = pca.transform(open_features_normalized)
 
             return open_features_pca

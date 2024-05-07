@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Calibration</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            /* font-family: Arial, sans-serif; */
+        }
+        video {
+            margin-bottom: 20px;
+        }
+        button {
+            margin: 10px;
+        }
+        p {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Calibration Setup</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <button id="toggleBtn">Start Recording</button>
+    <p id="status">Press 'Start Recording' to calibrate.</p>
+
+    <script>
+        const video = document.getElementById('video');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const statusText = document.getElementById('status');
+        let mediaRecorder;
+        let videoChunks = [];
+        let isRecording = false;
+
+        if (navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function (stream) {
+                video.srcObject = stream;
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = function (e) {
+                    videoChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = function () {
+                    const blob = new Blob(videoChunks, { 'type': 'video/mp4' });
+                    videoChunks = [];  // Clear the array for any subsequent recordings
+
+                    const formData = new FormData();
+                    formData.append('video', blob);
+
+                    fetch('/calibrate', {
+                        method: 'POST',
+                        body: formData,
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === "success") {
+                            statusText.textContent = "Calibration successful!";
+                        } else {
+                            statusText.textContent = "Calibration failed, please try again.";
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        statusText.textContent = "An error occurred during upload.";
+                    });
+                };
+            })
+            .catch(function (error) {
+                console.error("Error accessing the media devices.", error);
+                statusText.textContent = "Unable to access video. Check permissions.";
+            });
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                if (mediaRecorder && mediaRecorder.state === 'inactive') {
+                    mediaRecorder.start();
+                    toggleBtn.textContent = "Stop and Submit";
+                    statusText.textContent = "Recording...";
+                    isRecording = true;
+                }
+            } else {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    toggleBtn.textContent = "Start Recording";
+                    statusText.textContent = "Stopping and uploading...";
+                    isRecording = false;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

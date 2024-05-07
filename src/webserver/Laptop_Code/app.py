@@ -6,11 +6,11 @@ from PIL import Image
 import io
 import pickle
 import glob
+import numpy as np
 
 app = Flask(__name__)
 
-video_files_directory = os.path.join(os.getcwd(), 'video_files')
-os.makedirs(video_files_directory, exist_ok=True)
+video_durations = []
 
 @app.route('/')
 def index():
@@ -20,18 +20,32 @@ def index():
 def process():
     video = request.files['video']
     video_data = video.read()
+    duration = float(request.form['duration'])
+    video_durations.append(duration)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    url = 'http://199.98.27.237:8010/process_data'
 
-    url = 'http://199.98.27.237:8003/process_data'
     files = {'file': ('video.mp4', video_data, 'video/mp4')}
-    response = requests.post(url, files=files)
+    data = {}
+
+    if len(video_durations) >= 5:
+        first_durations = video_durations[:5]
+        average_duration = np.mean(first_durations)
+        std_deviation = np.std(first_durations)
+        
+        data['average_duration'] = average_duration
+        data['std_deviation'] = std_deviation 
+        data['duration'] = duration
+
+    response = requests.post(url, files=files, data=data)
 
     if response.status_code == 200:
         # Unpickle the received data to get both the image bytes and engagement score
         received_data = pickle.loads(response.content)
         img_data = received_data['img_data']
         engagement_score = received_data['engagement_score']
+        session_end = received_data.get('end', False) 
 
         generated_art_dir = 'static/assets/Generated_Art'
         os.makedirs(generated_art_dir, exist_ok=True)
@@ -41,12 +55,20 @@ def process():
         with open(image_path, 'wb') as f:
             f.write(img_data)
 
-        return jsonify({
+        response_data = {
             "status": "success",
             "message": "Art and engagement score received successfully",
             "imagePath": image_path,
-            "engagementScore": engagement_score
-        })
+            "engagementScore": engagement_score,
+            "sessionEnd": session_end
+        }
+
+        if 'average_duration' in data:
+            response_data['averageDuration'] = data['average_duration']
+            response_data['stdDeviation'] = data['std_deviation']    
+
+        return jsonify(response_data)
+    
     else:
         return jsonify({"status": "failure", "message": "Failed to receive art"})
 
@@ -62,7 +84,7 @@ def submit_score():
     if not -1 <= score_val <= 1:
         return jsonify({"status": "failure", "message": "Score must be between -1 and 1"})
 
-    url = 'http://199.98.27.237:8003/receive_score'
+    url = 'http://199.98.27.237:8010/receive_score'
     payload = {'score': score_val}
     headers = {'Content-Type': 'application/json'}
 
@@ -84,6 +106,24 @@ def submit_score():
         return jsonify({"status": "success", "message": "Art received successfully", "imagePath": image_path})
     else:
         return jsonify({"status": "failure", "message": "Failed to receive art"})
+
+@app.route('/calibrate', methods=['GET', 'POST'])
+def calibrate():
+    if request.method == 'POST':
+        video = request.files['video']
+        video_data = video.read()
+
+        files = {'calibrate_file': ('calibrate_file.mp4', video_data, 'video/mp4')}
+        response = requests.post('http://199.98.27.237:8010/upload_calibrate', files=files)
+
+        if response.status_code == 200:
+            return jsonify({"status": "success", "message": "Calibration video uploaded successfully"})
+        else:
+            return jsonify({"status": "failure", "message": "Failed to upload calibration video"})
+
+    return render_template('calibrate.html')
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
