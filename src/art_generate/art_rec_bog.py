@@ -26,7 +26,8 @@ class ArtRecSystem:
         max_jump=1 / 1000,
         total_iterations=18,
         art_generate=False,  # determines whether art will be outputted
-        embed_type="openai"
+        embed_type="openai",
+        random=False, # determines whether to use random embeddings
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
         #signal.signal(signal.SIGINT, self.signal_handler)
@@ -56,6 +57,7 @@ class ArtRecSystem:
         self._iteration = 0
         self._max_jump = 1 / 3
         self._ratings = []
+        self._random = random
         self._cur_dir = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         os.mkdir(f"{gars_art_path}/logs/{self._cur_dir}")
         self._cur_dir = f"{gars_art_path}/logs/{self._cur_dir}"
@@ -242,12 +244,14 @@ class ArtRecSystem:
             self.save_state()
         self._ratings.append(rating)
         # sampling stage
-        if self._iteration < self._user_sample_stage_size:
+        if self._iteration < self._user_sample_stage_size or self._random:
             rec_words = self.sampling_stage(rating)
             rec_prompt = f"{rec_words[-1]} {rec_words[0]}, {rec_words[1]}, {rec_words[2]}, {rec_words[3]}, {rec_words[4]}"
             self._matrices[self._iteration] += self._user_matrix
 
             self._iteration += 1
+            if self._random:
+                logging.debug("generating random images only")
             logging.debug("\n")
             return (
                 self.generate_image(rec_prompt),
