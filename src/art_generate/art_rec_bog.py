@@ -482,9 +482,16 @@ class ArtRecSystem:
         print("SAVING CURRENT STATE")
         with open(f"{self._cur_dir}/rec_embed_indices.json", "w") as fp:
             json.dump(self._rec_embed_indices, fp)
+        save_ratings = []
+        for i in self._ratings:
+            if(isinstance(i, np.ndarray)):
+                save_ratings.append(i[0][0])
+            else:
+                save_ratings.append(i)
 
+               
         with open(f"{self._cur_dir}/ratings.json", "w") as fp:
-            json.dump(self._ratings, fp, indent=4)
+            json.dump(save_ratings, fp, indent=4)
 
         np.save(f"{self._cur_dir}/user_matrices.npy", self._matrices)
 
@@ -668,7 +675,7 @@ if __name__ == "__main2__":
 
 
 def test_system():
-    rec = ArtRecSystem(metric="cosine", embed_type="openai")#
+    rec = ArtRecSystem(metric="cosine", embed_type="openai"#
     #breakpoint()
     while 1:
         rating = input("get rating:")
