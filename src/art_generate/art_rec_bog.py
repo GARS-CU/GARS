@@ -13,7 +13,9 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-
+from diffusers import StableDiffusionXLPipeline, UNet2DConditionModel, EulerDiscreteScheduler
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 
 class ArtRecSystem:
     """Art Recommendation System using Bag of Words Approach"""
@@ -28,6 +30,7 @@ class ArtRecSystem:
         art_generate=False,  # determines whether art will be outputted
         embed_type="openai",
         random=False, # determines whether to use random embeddings
+        bytedance=False, # determines whether to use bytedance model
     ):
         """mimokowski = euclidean distance, cosine = 1 - cosine similarity"""
         #signal.signal(signal.SIGINT, self.signal_handler)
@@ -73,11 +76,29 @@ class ArtRecSystem:
             self._category_indices = json.load(file)
 
         if art_generate:
+            if bytedance:
+                base = 'stabilityai/stable-diffusion-xl-base-1.0'
+                repo = "ByteDance/SDXL-Lightning"
+                ckpt = "sdxl_lightning_4step_unet.safetensors" # Use the correct ckpt for your step setting!
+
+                unet = UNet2DConditionModel.from_config(base, subfolder="unet").to("cuda", torch.float16)
+                unet.load_state_dict(load_file(hf_hub_download(repo, ckpt), device="cuda"))
+                pipe = StableDiffusionXLPipeline.from_pretrained(base, unet=unet, torch_dtype=torch.float16, variant="fp16").to("cuda")
+
+                # Ensure sampler uses "trailing" timesteps.
+                pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
+
+                #lambda function
+                self.gen_img = lambda prompt: pipe(prompt=prompt, num_inference_steps=4, guidance_scale=0).images[0]   
+
             # for now and testing sdxl-turbo, for actual one bytedance model, stable cascade still not working
-            self.sdxl_turbo = AutoPipelineForText2Image.from_pretrained(
+            else:
+                self.sdxl_turbo = AutoPipelineForText2Image.from_pretrained(
                 "stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16"
             )
-            self.sdxl_turbo.to("cuda")
+                self.sdxl_turbo.to("cuda")
+                self.gen_img = lambda prompt: self.sdxl_turbo(prompt=prompt, num_inference_steps=1, guidance_scale=0.0).images[0]
+                
             self.art_generate = True
         else:
             self.art_generate = False
@@ -217,9 +238,7 @@ class ArtRecSystem:
         """generates an image given a prompt"""
 
         if self.art_generate:
-            image = self.sdxl_turbo(
-                prompt=prompt, num_inference_steps=1, guidance_scale=0.0
-            ).images[0]
+            image = self.gen_img(prompt)
         else:
             image = -1
 
@@ -675,7 +694,7 @@ if __name__ == "__main2__":
 
 
 def test_system():
-    rec = ArtRecSystem(metric="cosine", embed_type="openai"#
+    rec = ArtRecSystem(metric="cosine", embed_type="openai")#
     #breakpoint()
     while 1:
         rating = input("get rating:")
